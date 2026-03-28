@@ -1,0 +1,273 @@
+using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Globalization;
+
+namespace AulaSync;
+
+/// <summary>
+/// Opretter Aula-beskeder i Outlook og sætter korrekte tidsstempler via direkte MAPI.
+/// </summary>
+class OutlookBridge
+{
+    [DllImport("mapi32.dll")] static extern int MAPIInitialize(IntPtr lpMapiInit);
+    [DllImport("mapi32.dll")] static extern int MAPILogonEx(IntPtr ulUIParam,
+        [MarshalAs(UnmanagedType.LPWStr)] string? profile,
+        [MarshalAs(UnmanagedType.LPWStr)] string? password,
+        uint flags, out IntPtr session);
+    [DllImport("mapi32.dll")] static extern void MAPIUninitialize();
+
+    const uint MAPI_EXTENDED = 0x20, MAPI_USE_DEFAULT = 0x40, MAPI_NO_MAIL = 0x8000;
+    const uint MAPI_UNICODE = 0x80000000, MDB_WRITE = 0x04, MAPI_DEFERRED_ERRORS = 0x08;
+    const uint MAPI_BEST_ACCESS = 0x10;
+    const uint PR_MESSAGE_DELIVERY_TIME = 0x0E060040;
+    const uint PR_CLIENT_SUBMIT_TIME = 0x00390040;
+    const uint PR_MESSAGE_FLAGS = 0x0E070003;
+    const uint PR_SENDER_NAME_W = 0x0C1A001F;
+    const uint PR_SENT_REPRESENTING_NAME_W = 0x0042001F;
+    const int MSGFLAG_READ = 0x01;
+
+    delegate int OpenMsgStoreDel(IntPtr self, IntPtr ui, uint cb, IntPtr eid, IntPtr iface, uint flags, out IntPtr store);
+    delegate int OpenEntryDel(IntPtr self, uint cb, IntPtr eid, IntPtr iface, uint flags, out uint type, out IntPtr obj);
+    delegate int SetPropsDel(IntPtr self, uint count, IntPtr props, out IntPtr problems);
+    delegate int SaveChangesDel(IntPtr self, uint flags);
+
+    static T V<T>(IntPtr obj, int slot) where T : Delegate =>
+        Marshal.GetDelegateForFunctionPointer<T>(Marshal.ReadIntPtr(Marshal.ReadIntPtr(obj), slot * IntPtr.Size));
+
+    static int SetOneProp(IntPtr pMsg, uint tag, long value)
+    {
+        IntPtr p = Marshal.AllocHGlobal(16);
+        unsafe { byte* b = (byte*)p; *(uint*)b = tag; *(uint*)(b + 4) = 0; *(long*)(b + 8) = value; }
+        int hr = V<SetPropsDel>(pMsg, 8)(pMsg, 1, p, out _);
+        Marshal.FreeHGlobal(p);
+        return hr;
+    }
+
+    private const string AulaFolderName = "Aula";
+    private const string SeenFileName = "seen_threads.json";
+
+    private static string ConfigDir => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aulasync");
+    private static string SeenFilePath => Path.Combine(ConfigDir, SeenFileName);
+
+    private static void Log(string msg)
+    {
+        try
+        {
+            var logFile = Path.Combine(ConfigDir, "aulasync.log");
+            File.AppendAllText(logFile, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [Outlook] {msg}\n");
+        }
+        catch { }
+    }
+
+    private static Dictionary<string, JsonElement> LoadSeen()
+    {
+        Directory.CreateDirectory(ConfigDir);
+        if (!File.Exists(SeenFilePath)) return new();
+        try
+        {
+            var json = File.ReadAllText(SeenFilePath);
+            return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json) ?? new();
+        }
+        catch { return new(); }
+    }
+
+    private static void SaveSeen(Dictionary<string, JsonElement> seen)
+    {
+        Directory.CreateDirectory(ConfigDir);
+        File.WriteAllText(SeenFilePath, JsonSerializer.Serialize(seen, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    public static int CreateOutlookItems(List<AulaMessage> messages)
+    {
+        if (messages.Count == 0) return 0;
+
+        var seen = LoadSeen();
+        int newCount = 0;
+
+        // Outlook OOM
+        dynamic outlook = Activator.CreateInstance(Type.GetTypeFromProgID("Outlook.Application")!)!;
+        dynamic ns = outlook.GetNamespace("MAPI");
+
+        // Altid "Aula"-undermappe i Indbakken
+        dynamic aulaFolder = GetOrCreateAulaFolder(ns);
+
+        string storeId = aulaFolder.StoreID;
+
+        // MAPI session til timestamps
+        MAPIInitialize(IntPtr.Zero);
+        MAPILogonEx(IntPtr.Zero, null, null,
+            MAPI_EXTENDED | MAPI_USE_DEFAULT | MAPI_NO_MAIL | MAPI_UNICODE,
+            out IntPtr pSession);
+
+        // Åbn store via MAPI
+        byte[] storeEid = Convert.FromHexString(storeId);
+        IntPtr pStoreEid = Marshal.AllocHGlobal(storeEid.Length);
+        Marshal.Copy(storeEid, 0, pStoreEid, storeEid.Length);
+        V<OpenMsgStoreDel>(pSession, 5)(pSession, IntPtr.Zero,
+            (uint)storeEid.Length, pStoreEid, IntPtr.Zero,
+            MDB_WRITE | MAPI_DEFERRED_ERRORS, out IntPtr pStore);
+        Marshal.FreeHGlobal(pStoreEid);
+
+        foreach (var msg in messages)
+        {
+            var seenKey = $"{msg.ThreadId}_{msg.Timestamp}";
+            if (seen.ContainsKey(seenKey))
+            {
+                Log($"Skip (seen): {seenKey}");
+                continue;
+            }
+            Log($"NY besked: {seenKey} - {msg.Subject}");
+
+            try
+            {
+                // Opret som PostItem (read-only i undermappe)
+                dynamic mail = outlook.CreateItem(6); // PostItem
+                mail.Subject = $"[Aula] [{msg.Sender}] {msg.Subject}";
+                mail.HTMLBody = FormatHtml(msg);
+                mail.UnRead = !msg.IsRead;
+                mail.Importance = msg.IsRead ? 1 : 2;
+
+                mail.Save();
+                mail.Move(aulaFolder);
+
+                // Find beskeden i mappen (senest oprettet)
+                dynamic items = aulaFolder.Items;
+                items.Sort("[ReceivedTime]", true);
+                dynamic latest = items.GetFirst();
+                string entryId = latest.EntryID;
+
+                // Patch timestamps via MAPI
+                if (DateTime.TryParse(msg.Timestamp, CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind, out var dt))
+                {
+                    PatchTimestamp(pStore, entryId, dt, msg.Sender);
+                }
+
+                seen[seenKey] = JsonSerializer.SerializeToElement(new
+                {
+                    thread_id = msg.ThreadId,
+                    subject = msg.Subject,
+                    imported_at = DateTime.Now.ToString("o"),
+                });
+                newCount++;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Fejl ved import af tråd {msg.ThreadId}: {ex.Message}");
+            }
+        }
+
+        SaveSeen(seen);
+        try { MAPIUninitialize(); } catch { }
+
+        return newCount;
+    }
+
+    private static void PatchTimestamp(IntPtr pStore, string entryIdHex, DateTime timestamp, string sender)
+    {
+        byte[] msgEid = Convert.FromHexString(entryIdHex);
+        IntPtr pMsgEid = Marshal.AllocHGlobal(msgEid.Length);
+        Marshal.Copy(msgEid, 0, pMsgEid, msgEid.Length);
+
+        int hr = V<OpenEntryDel>(pStore, 17)(pStore,
+            (uint)msgEid.Length, pMsgEid, IntPtr.Zero,
+            MAPI_BEST_ACCESS, out _, out IntPtr pMsg);
+        Marshal.FreeHGlobal(pMsgEid);
+        if (hr != 0) return;
+
+        long ft = timestamp.ToUniversalTime().ToFileTimeUtc();
+
+        // MSGFLAG_READ(0x01) uden MSGFLAG_UNSENT(0x08) = "modtaget besked" (ikke redigerbar)
+        SetOneProp(pMsg, PR_MESSAGE_FLAGS, MSGFLAG_READ); // 0x01 only
+
+        // Sæt afsender
+        IntPtr pSender = Marshal.StringToHGlobalUni(sender);
+        SetOneProp(pMsg, PR_SENDER_NAME_W, pSender.ToInt64());
+        SetOneProp(pMsg, PR_SENT_REPRESENTING_NAME_W, pSender.ToInt64());
+        Marshal.FreeHGlobal(pSender);
+
+        // Sæt tidsstempler
+        SetOneProp(pMsg, PR_MESSAGE_DELIVERY_TIME, ft);
+        SetOneProp(pMsg, PR_CLIENT_SUBMIT_TIME, ft);
+
+        // Gem
+        V<SaveChangesDel>(pMsg, 4)(pMsg, 0);
+    }
+
+    private static dynamic GetOrCreateAulaFolder(dynamic ns)
+    {
+        dynamic inbox = ns.GetDefaultFolder(6);
+        foreach (dynamic f in inbox.Folders)
+            if (f.Name == AulaFolderName) return f;
+        Log($"Opretter mappe '{AulaFolderName}' i Indbakken");
+        return inbox.Folders.Add(AulaFolderName);
+    }
+
+    public static void ResetSeen()
+    {
+        if (File.Exists(SeenFilePath)) File.Delete(SeenFilePath);
+    }
+
+    private static string FormatHtml(AulaMessage msg)
+    {
+        var senderRole = msg.SenderMeta.Contains(" - ") ? msg.SenderMeta.Split(" - ")[0] : msg.SenderMeta;
+        var formattedTime = msg.Timestamp;
+        if (DateTime.TryParse(msg.Timestamp, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
+            formattedTime = dt.ToString("dd. MMM yyyy 'kl.' HH:mm", new CultureInfo("da-DK"));
+
+        var html = $@"<html><head><meta charset='utf-8'>
+<style>
+body {{ font-family: Segoe UI, sans-serif; font-size: 10pt; color: #333; margin: 16px; }}
+.hdr {{ background: #2c3e87; color: white; padding: 12px 16px; border-radius: 6px 6px 0 0; overflow: hidden; }}
+.hdr h2 {{ margin: 0; font-size: 13pt; display: inline; }}
+.hdr a {{ color: white; background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 4px; font-size: 9pt; text-decoration: none; float: right; margin-top: 2px; }}
+.meta {{ background: #f0f2f8; padding: 10px 16px; font-size: 9pt; color: #555; border-bottom: 1px solid #d0d5e5; }}
+.meta b {{ color: #333; }}
+.role {{ color: #888; font-style: italic; }}
+.body {{ padding: 16px; background: white; border: 1px solid #e0e3ed; border-top: none; }}
+.footer {{ font-size: 8pt; color: #999; margin-top: 20px; padding-top: 10px; border-top: 1px solid #eee; }}
+.footer a {{ color: #2c3e87; text-decoration: none; }}
+.prev {{ margin: 8px 0; padding: 10px; background: #f8f9fc; border-left: 3px solid #2c3e87; border-radius: 0 4px 4px 0; }}
+.prev .sender {{ font-weight: 600; }}
+.prev .time {{ color: #999; font-size: 8pt; margin-left: 8px; }}
+</style></head><body>
+<div class='hdr'><h2>{msg.Subject}</h2>
+<a href='https://www.aula.dk/portal/#/beskeder/{msg.ThreadId}'>Åbn i Aula ↗</a></div>
+<div class='meta'><b>Fra:</b> {msg.Sender}";
+
+        if (!string.IsNullOrEmpty(senderRole))
+            html += $" <span class='role'>({senderRole})</span>";
+        html += $"<br><b>Dato:</b> {formattedTime}";
+        if (msg.TotalRecipients > 0)
+        {
+            html += $"<br><b>Til:</b> {msg.TotalRecipients} modtagere";
+            if (msg.TotalMessages > 1) html += $" · {msg.TotalMessages} beskeder i tråden";
+        }
+        html += $"</div><div class='body'>{msg.Text}</div>";
+
+        // Tidligere beskeder
+        if (msg.AllMessages.Count > 1)
+        {
+            html += "<div style='padding: 0 16px 16px; background: white; border: 1px solid #e0e3ed; border-top: none;'>";
+            html += "<p style='color: #666; font-size: 9pt; margin-top: 16px;'><b>Tidligere i tråden:</b></p>";
+            foreach (var m in msg.AllMessages.Skip(1))
+            {
+                var mTime = "";
+                if (DateTime.TryParse(m.Timestamp, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var mdt))
+                    mTime = mdt.ToString("dd. MMM 'kl.' HH:mm", new CultureInfo("da-DK"));
+                var mRole = m.SenderMeta.Contains(" - ") ? m.SenderMeta.Split(" - ")[0] : "";
+                html += $"<div class='prev'><span class='sender'>{m.Sender}</span>";
+                if (!string.IsNullOrEmpty(mRole)) html += $" <span class='role'>({mRole})</span>";
+                html += $"<span class='time'>{mTime}</span><br>{m.Text}</div>";
+            }
+            html += "</div>";
+        }
+
+        html += $@"<div class='footer'>
+<a href='https://www.aula.dk/portal/#/beskeder/{msg.ThreadId}'>Åbn i Aula</a> · Importeret af AulaSync
+</div></body></html>";
+
+        return html;
+    }
+}
