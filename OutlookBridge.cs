@@ -117,7 +117,7 @@ class OutlookBridge
                 Log($"Skip (seen): {seenKey}");
                 continue;
             }
-            Log($"NY besked: {seenKey} - {msg.Subject}");
+            Log($"NY besked: tråd {msg.ThreadId}");
 
             try
             {
@@ -234,7 +234,7 @@ body {{ font-family: Segoe UI, sans-serif; font-size: 10pt; color: #333; margin:
 </style></head><body>
 <div class='hdr'><h2>{msg.Subject}</h2>
 <a href='https://www.aula.dk/portal/#/beskeder/{msg.ThreadId}'>Åbn i Aula ↗</a></div>
-<div class='meta'><b>Fra:</b> {msg.Sender}";
+<div class='meta'><b>Fra:</b> {System.Net.WebUtility.HtmlEncode(msg.Sender)}";
 
         if (!string.IsNullOrEmpty(senderRole))
             html += $" <span class='role'>({senderRole})</span>";

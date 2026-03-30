@@ -1,6 +1,11 @@
 bin/
 obj/
 publish/
+publish-single/
+publish-release/
+publish-standalone/
+*.zip
 .vs/
 *.user
 Resources/icon.ico
+tools/
