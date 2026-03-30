@@ -580,7 +580,7 @@ class TrayApp
                 if (!string.IsNullOrEmpty(teacherInits)) parts.Add(teacherInits);
                 break;
         }
-        return string.Join("; ", parts);
+        return string.Join(" | ", parts);
     }
 
     private void ShowBalloon(string text)

@@ -14,7 +14,7 @@ Synkroniserer beskeder og skemaer fra [Aula](https://www.aula.dk) til Microsoft 
 - **Medarbejderskemaer** - se kollegers ugeskema direkte i Outlook
 - **Klasseskemaer** - se en klasses ugeskema
 - **Lokaleskemaer** - se hvad der sker i et lokale
-- Format tilpasset kontekst: `FAG; Lokale; Klasse` / `FAG; Lokale; INIT` / `FAG; Klasse; INIT`
+- Format tilpasset kontekst: `FAG | Lokale | Klasse` / `FAG | Lokale | INIT` / `FAG | Klasse | INIT`
 - 3 måneder frem + 3 måneder tilbage
 - Automatisk opdatering hver time
 
