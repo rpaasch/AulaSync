@@ -72,10 +72,18 @@ class OutlookBridge
         catch { return new(); }
     }
 
+    private static readonly object _seenLock = new();
+
     private static void SaveSeen(Dictionary<string, JsonElement> seen)
     {
-        Directory.CreateDirectory(ConfigDir);
-        File.WriteAllText(SeenFilePath, JsonSerializer.Serialize(seen, new JsonSerializerOptions { WriteIndented = true }));
+        lock (_seenLock)
+        {
+            Directory.CreateDirectory(ConfigDir);
+            // Atomisk skrivning via temp-fil
+            var tmp = SeenFilePath + ".tmp";
+            File.WriteAllText(tmp, JsonSerializer.Serialize(seen, new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(tmp, SeenFilePath, true);
+        }
     }
 
     public static int CreateOutlookItems(List<AulaMessage> messages)
@@ -147,10 +155,10 @@ class OutlookBridge
                 seen[seenKey] = JsonSerializer.SerializeToElement(new
                 {
                     thread_id = msg.ThreadId,
-                    subject = msg.Subject,
                     imported_at = DateTime.Now.ToString("o"),
                 });
                 newCount++;
+                SaveSeen(seen); // Gem efter hver besked så vi ikke mister progress
             }
             catch (Exception ex)
             {
@@ -159,6 +167,8 @@ class OutlookBridge
         }
 
         SaveSeen(seen);
+        try { if (pStore != IntPtr.Zero) Marshal.Release(pStore); } catch { }
+        try { if (pSession != IntPtr.Zero) Marshal.Release(pSession); } catch { }
         try { MAPIUninitialize(); } catch { }
 
         return newCount;
@@ -166,7 +176,12 @@ class OutlookBridge
 
     private static void PatchTimestamp(IntPtr pStore, string entryIdHex, DateTime timestamp, string sender)
     {
-        byte[] msgEid = Convert.FromHexString(entryIdHex);
+        if (string.IsNullOrEmpty(entryIdHex)) return;
+
+        byte[] msgEid;
+        try { msgEid = Convert.FromHexString(entryIdHex); }
+        catch { return; }
+
         IntPtr pMsgEid = Marshal.AllocHGlobal(msgEid.Length);
         Marshal.Copy(msgEid, 0, pMsgEid, msgEid.Length);
 
@@ -176,23 +191,26 @@ class OutlookBridge
         Marshal.FreeHGlobal(pMsgEid);
         if (hr != 0) return;
 
-        long ft = timestamp.ToUniversalTime().ToFileTimeUtc();
+        try
+        {
+            long ft = timestamp.ToUniversalTime().ToFileTimeUtc();
 
-        // MSGFLAG_READ(0x01) uden MSGFLAG_UNSENT(0x08) = "modtaget besked" (ikke redigerbar)
-        SetOneProp(pMsg, PR_MESSAGE_FLAGS, MSGFLAG_READ); // 0x01 only
+            SetOneProp(pMsg, PR_MESSAGE_FLAGS, MSGFLAG_READ);
 
-        // Sæt afsender
-        IntPtr pSender = Marshal.StringToHGlobalUni(sender);
-        SetOneProp(pMsg, PR_SENDER_NAME_W, pSender.ToInt64());
-        SetOneProp(pMsg, PR_SENT_REPRESENTING_NAME_W, pSender.ToInt64());
-        Marshal.FreeHGlobal(pSender);
+            IntPtr pSender = Marshal.StringToHGlobalUni(sender ?? "");
+            SetOneProp(pMsg, PR_SENDER_NAME_W, pSender.ToInt64());
+            SetOneProp(pMsg, PR_SENT_REPRESENTING_NAME_W, pSender.ToInt64());
+            Marshal.FreeHGlobal(pSender);
 
-        // Sæt tidsstempler
-        SetOneProp(pMsg, PR_MESSAGE_DELIVERY_TIME, ft);
-        SetOneProp(pMsg, PR_CLIENT_SUBMIT_TIME, ft);
+            SetOneProp(pMsg, PR_MESSAGE_DELIVERY_TIME, ft);
+            SetOneProp(pMsg, PR_CLIENT_SUBMIT_TIME, ft);
 
-        // Gem
-        V<SaveChangesDel>(pMsg, 4)(pMsg, 0);
+            V<SaveChangesDel>(pMsg, 4)(pMsg, 0);
+        }
+        finally
+        {
+            Marshal.Release(pMsg);
+        }
     }
 
     private static dynamic GetOrCreateAulaFolder(dynamic ns)
@@ -232,7 +250,7 @@ body {{ font-family: Segoe UI, sans-serif; font-size: 10pt; color: #333; margin:
 .prev .sender {{ font-weight: 600; }}
 .prev .time {{ color: #999; font-size: 8pt; margin-left: 8px; }}
 </style></head><body>
-<div class='hdr'><h2>{msg.Subject}</h2>
+<div class='hdr'><h2>{System.Net.WebUtility.HtmlEncode(msg.Subject)}</h2>
 <a href='https://www.aula.dk/portal/#/beskeder/{msg.ThreadId}'>Åbn i Aula ↗</a></div>
 <div class='meta'><b>Fra:</b> {System.Net.WebUtility.HtmlEncode(msg.Sender)}";
 

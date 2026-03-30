@@ -40,6 +40,58 @@ class AulaApi
         _client = client;
     }
 
+    private async Task<HttpResponseMessage> GetWithRetryAsync(string url, int retries = 3)
+    {
+        for (int i = 0; i < retries; i++)
+        {
+            try
+            {
+                var resp = await _client.GetAsync(url);
+                if ((int)resp.StatusCode >= 500 && i < retries - 1)
+                {
+                    await Task.Delay(1000 * (i + 1));
+                    continue;
+                }
+                return resp;
+            }
+            catch (HttpRequestException) when (i < retries - 1)
+            {
+                await Task.Delay(1000 * (i + 1));
+            }
+            catch (TaskCanceledException) when (i < retries - 1)
+            {
+                await Task.Delay(1000 * (i + 1));
+            }
+        }
+        return await _client.GetAsync(url); // Sidste forsøg - lad exception boble
+    }
+
+    private async Task<HttpResponseMessage> PostWithRetryAsync(string url, HttpContent content, int retries = 3)
+    {
+        for (int i = 0; i < retries; i++)
+        {
+            try
+            {
+                var resp = await _client.PostAsync(url, content);
+                if ((int)resp.StatusCode >= 500 && i < retries - 1)
+                {
+                    await Task.Delay(1000 * (i + 1));
+                    continue;
+                }
+                return resp;
+            }
+            catch (HttpRequestException) when (i < retries - 1)
+            {
+                await Task.Delay(1000 * (i + 1));
+            }
+            catch (TaskCanceledException) when (i < retries - 1)
+            {
+                await Task.Delay(1000 * (i + 1));
+            }
+        }
+        return await _client.PostAsync(url, content);
+    }
+
     public async Task<bool> ConnectAsync()
     {
         // Find API-version
@@ -51,30 +103,62 @@ class AulaApi
             if (!resp.IsSuccessStatusCode) continue;
 
             var json = await resp.Content.ReadAsStringAsync();
-            var doc = JsonDocument.Parse(json);
-            var status = doc.RootElement.GetProperty("status").GetProperty("message").GetString();
-            if (status != "OK") continue;
+            JsonDocument doc;
+            try { doc = JsonDocument.Parse(json); } catch { continue; }
+            if (!doc.RootElement.TryGetProperty("status", out var statusEl) ||
+                !statusEl.TryGetProperty("message", out var msgEl) ||
+                msgEl.GetString() != "OK") continue;
 
-            // Første profil matcher login-valget (API sorterer efter aktiv rolle)
+            // Hent aktiv profil via getProfileContext (korrekt uanset antal profiler)
+            try
+            {
+                var ctxResp = await _client.GetAsync($"{_apiUrl}?method=profiles.getProfileContext&portalrole=employee");
+                if (ctxResp.IsSuccessStatusCode)
+                {
+                    var ctxJson = await ctxResp.Content.ReadAsStringAsync();
+                    var ctxDoc = JsonDocument.Parse(ctxJson);
+                    var ctxData = ctxDoc.RootElement.GetProperty("data");
+                    var ip = ctxData.GetProperty("institutionProfile");
+                    MyProfileId = ip.TryGetProperty("id", out var pid) ? pid.ToString() : "";
+                    Role = ip.TryGetProperty("role", out var r) ? r.GetString() ?? "" : "";
+                    var firstName = ip.TryGetProperty("firstName", out var fn) ? fn.GetString() ?? "" : "";
+                    var lastName = ip.TryGetProperty("lastName", out var ln) ? ln.GetString() ?? "" : "";
+                    UserName = $"{firstName} {lastName}".Trim();
+                    if (string.IsNullOrEmpty(UserName)) UserName = "Ukendt";
+
+                    // institutionCode/Name er nested i "institution"
+                    if (ip.TryGetProperty("institution", out var instObj))
+                    {
+                        InstitutionCode = instObj.TryGetProperty("institutionCode", out var ic) ? ic.GetString() ?? "" : "";
+                        Institution = instObj.TryGetProperty("institutionName", out var inst) ? inst.GetString() ?? "" : "";
+                    }
+
+                    Log($"Profil (context): {UserName} | {RoleDanish} | {Institution} (kode: {InstitutionCode})");
+                    return InstitutionCode != "";
+                }
+            }
+            catch { }
+
+            // Fallback: brug første profil fra getProfilesByLogin
             var profiles = doc.RootElement.GetProperty("data").GetProperty("profiles");
             foreach (var profile in profiles.EnumerateArray())
             {
-                UserName = profile.GetProperty("displayName").GetString() ?? "Ukendt";
+                UserName = profile.TryGetProperty("displayName", out var dn) ? dn.GetString() ?? "Ukendt" : "Ukendt";
                 if (profile.TryGetProperty("institutionProfiles", out var ips))
                 {
-                    foreach (var ip in ips.EnumerateArray())
+                    foreach (var ip2 in ips.EnumerateArray())
                     {
-                        Role = ip.TryGetProperty("role", out var r) ? r.GetString() ?? "" : "";
-                        Institution = ip.TryGetProperty("institutionName", out var i) ? i.GetString() ?? "" : "";
-                        InstitutionCode = ip.TryGetProperty("institutionCode", out var ic) ? ic.GetString() ?? "" : "";
-                        MyProfileId = ip.TryGetProperty("id", out var pid) ? pid.ToString() : "";
+                        Role = ip2.TryGetProperty("role", out var r2) ? r2.GetString() ?? "" : "";
+                        Institution = ip2.TryGetProperty("institutionName", out var i2) ? i2.GetString() ?? "" : "";
+                        InstitutionCode = ip2.TryGetProperty("institutionCode", out var ic2) ? ic2.GetString() ?? "" : "";
+                        MyProfileId = ip2.TryGetProperty("id", out var pid2) ? pid2.ToString() : "";
                         break;
                     }
                 }
                 break;
             }
-            Log($"Profil: {UserName} | {RoleDanish} | {Institution}");
-            return UserName != "";
+            Log($"Profil (fallback): {UserName} | {RoleDanish} | {Institution} (kode: {InstitutionCode})");
+            return UserName != "" && InstitutionCode != "";
         }
         return false;
     }
@@ -104,6 +188,7 @@ class AulaApi
 
         foreach (var letter in alphabet)
         {
+            await Task.Delay(50); // Rate limiting
             var resp = await _client.GetAsync(
                 $"{_apiUrl}?method=search.findProfilesAndGroups" +
                 $"&text={letter}&instCodes[]={InstitutionCode}&typeahead=true&limit=100" +
@@ -219,20 +304,23 @@ class AulaApi
             sb.AppendLine($"DTEND:{dtEnd.ToUniversalTime():yyyyMMddTHHmmssZ}");
             // Titel: "FAG (Klasse)" eller bare "FAG"
             var summary = !string.IsNullOrEmpty(ev.Groups) ? $"{ev.Title} ({ev.Groups})" : ev.Title;
-            sb.AppendLine($"SUMMARY:{summary}");
+            sb.AppendLine($"SUMMARY:{IcsEscape(summary)}");
             if (!string.IsNullOrEmpty(ev.Location))
-                sb.AppendLine($"LOCATION:{ev.Location}");
+                sb.AppendLine($"LOCATION:{IcsEscape(ev.Location)}");
             var desc = new List<string>();
             if (!string.IsNullOrEmpty(ev.Teacher)) desc.Add(ev.Teacher);
             if (!string.IsNullOrEmpty(ev.Groups)) desc.Add($"Klasse: {ev.Groups}");
             if (!string.IsNullOrEmpty(ev.Location)) desc.Add($"Lokale: {ev.Location}");
-            if (desc.Count > 0) sb.AppendLine($"DESCRIPTION:{string.Join(" | ", desc)}");
+            if (desc.Count > 0) sb.AppendLine($"DESCRIPTION:{IcsEscape(string.Join(" | ", desc))}");
             sb.AppendLine("END:VEVENT");
         }
 
         sb.AppendLine("END:VCALENDAR");
         return sb.ToString();
     }
+
+    private static string IcsEscape(string s) =>
+        s.Replace("\\", "\\\\").Replace(";", "\\;").Replace(",", "\\,").Replace("\n", "\\n");
 
     public class CalendarEvent
     {
@@ -265,6 +353,7 @@ class AulaApi
         var chars = "abcdefghijklmnopqrstuvwxyz0123456789æøå";
         foreach (var c in chars)
         {
+            await Task.Delay(50); // Rate limiting
             try
             {
                 var resp = await _client.GetAsync(
@@ -297,6 +386,7 @@ class AulaApi
         var chars = "abcdefghijklmnopqrstuvwxyz";
         foreach (var c in chars)
         {
+            await Task.Delay(50); // Rate limiting
             try
             {
                 var resp = await _client.GetAsync(

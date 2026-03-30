@@ -85,7 +85,7 @@ class AulaLogin
     public HttpClient CreateHttpClient()
     {
         var handler = new HttpClientHandler { CookieContainer = Cookies };
-        var client = new HttpClient(handler);
+        var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
         client.DefaultRequestHeaders.Add("Accept", "application/json, text/plain, */*");
 
         // Sæt CSRF header

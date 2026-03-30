@@ -179,7 +179,7 @@ class TrayApp
         menu.Opening += (_, _) => s.Text = StatusText();
 
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Hent nu", null, async (_, _) => await DoFetchAsync());
+        menu.Items.Add("Synkronisér beskeder", null, async (_, _) => await DoFetchAsync());
 
         // Medarbejdere submenu
         var empMenu = new ToolStripMenuItem("Medarbejderskemaer til Outlook");
@@ -327,7 +327,7 @@ class TrayApp
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             { FileName = $"{ProjectUrl}#vejledning", UseShellExecute = true });
         });
-        var about = new ToolStripMenuItem("AulaSync v2.1.0") { Enabled = false };
+        var about = new ToolStripMenuItem("AulaSync v2.1.1") { Enabled = false };
         settings.DropDownItems.Add(about);
 
         menu.Items.Add(settings);
@@ -358,9 +358,10 @@ class TrayApp
 
     private async Task DoFetchAsync()
     {
+        if (_api == null) return;
         try
         {
-            await _api!.TestSessionAsync();
+            await _api.TestSessionAsync();
             var count = await FetchMessagesAsync();
             _totalImported += count;
             _lastPoll = DateTime.Now;
