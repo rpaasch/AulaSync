@@ -75,10 +75,10 @@ class TrayApp
         _pollTimer.Interval = LoadConfig().TryGetValue("poll_interval", out var pi) ? (int)pi : 300_000;
         _pollTimer.Tick += async (_, _) => await DoFetchAsync();
 
-        // Kalender-synk (default hver 6. time)
+        // Rullende kalender-synk (interval = total cyklus / antal subscriptions, min 30 min)
         _calendarTimer = new System.Windows.Forms.Timer();
-        _calendarTimer.Interval = LoadConfig().TryGetValue("calendar_interval", out var ci) ? (int)ci : 6 * 3_600_000;
-        _calendarTimer.Tick += async (_, _) => await SyncAllCalendarsAsync();
+        _calendarTimer.Interval = 1_800_000; // Beregnes ved start
+        _calendarTimer.Tick += async (_, _) => await SyncNextCalendarAsync();
     }
 
     public async Task RunLoopAsync()
@@ -125,16 +125,21 @@ class TrayApp
             // Start polling
             _pollTimer.Start();
 
-            // Start kalender-synk forskudt 30 min
+            // Start rullende kalender-synk forskudt 5 min
             if (_subscribedEmployees.Count > 0)
             {
-                var calStartDelay = new System.Windows.Forms.Timer { Interval = 1_800_000 }; // 30 min
+                // Fordel synk jævnt: total cyklus (default 6t) / antal subscriptions, min 30 min
+                var totalCycleMs = LoadConfig().TryGetValue("calendar_interval", out var ci) ? (int)ci : 6 * 3_600_000;
+                _calendarTimer.Interval = Math.Max(totalCycleMs / _subscribedEmployees.Count, 1_800_000);
+                Log($"Kalender-sync: {_subscribedEmployees.Count} skemaer, interval {_calendarTimer.Interval / 60000} min");
+
+                var calStartDelay = new System.Windows.Forms.Timer { Interval = 300_000 }; // 5 min
                 calStartDelay.Tick += (_, _) =>
                 {
                     calStartDelay.Stop();
                     calStartDelay.Dispose();
                     _calendarTimer.Start();
-                    _ = SyncAllCalendarsAsync(); // Første synk
+                    _ = SyncNextCalendarAsync();
                 };
                 calStartDelay.Start();
             }
@@ -160,6 +165,8 @@ class TrayApp
             _api = null;
             _httpClient?.Dispose();
             _httpClient = null;
+            _cachedEmployees = null;
+            _syncIndex = 0;
         }
     }
 
@@ -621,30 +628,40 @@ class TrayApp
         catch { }
     }
 
-    private async Task SyncAllCalendarsAsync()
+    private List<AulaApi.Employee>? _cachedEmployees;
+    private int _syncIndex;
+
+    private async Task SyncNextCalendarAsync()
     {
-        if (_subscribedEmployees.Count == 0) return;
+        if (_api == null || _subscribedEmployees.Count == 0) return;
 
-        Log($"Synkroniserer {_subscribedEmployees.Count} skemaer...");
-
-        // Hent medarbejder-info
-        var employees = await _api!.GetEmployeesAsync();
-        var empById = employees.ToDictionary(e => e.Id);
-
-        foreach (var empId in _subscribedEmployees.ToList())
+        // Hent medarbejdere én gang, genbrug derefter
+        if (_cachedEmployees == null)
         {
-            if (!empById.TryGetValue(empId, out var emp)) continue;
-            try
-            {
-                await FetchAndSaveIcs(
-                    $"{emp.Initials} - {emp.Name}",
-                    () => FetchCalendarInChunks(emp.Id),
-                    emp.Initials, silent: true);
-            }
-            catch (Exception ex) { Log($"Sync fejl for {emp.Initials}: {ex.Message}"); }
+            try { _cachedEmployees = await _api.GetEmployeesAsync(); }
+            catch { return; }
         }
 
-        Log("Kalender-synk færdig");
+        var empById = _cachedEmployees.ToDictionary(e => e.Id);
+        var subList = _subscribedEmployees.ToList();
+        if (subList.Count == 0) return;
+
+        // Rullende: synk én ad gangen
+        _syncIndex = _syncIndex % subList.Count;
+        var empId = subList[_syncIndex];
+        _syncIndex++;
+
+        if (!empById.TryGetValue(empId, out var emp)) return;
+
+        try
+        {
+            Log($"Rullende sync: {emp.Initials} ({_syncIndex}/{subList.Count})");
+            await FetchAndSaveIcs(
+                $"{emp.Initials} - {emp.Name}",
+                () => FetchCalendarInChunks(emp.Id),
+                emp.Initials, silent: true);
+        }
+        catch (Exception ex) { Log($"Sync fejl for {emp.Initials}: {ex.Message}"); }
     }
 
     private static void Log(string message)
