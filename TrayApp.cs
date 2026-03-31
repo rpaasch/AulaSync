@@ -16,6 +16,9 @@ class TrayApp
     private DateTime? _lastPoll;
     private string? _lastError;
     private string _header = "AulaSync";
+    private bool _fetching;
+    private System.Net.HttpListener? _httpListener;
+    private const int IcsPort = 9876;
 
     private static readonly string ConfigDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aulasync");
@@ -29,6 +32,13 @@ class TrayApp
         ["Hvert 10. minut"] = 600_000,
         ["Hvert 30. minut"] = 1_800_000,
         ["Hver time"] = 3_600_000,
+    };
+
+    private static readonly Dictionary<string, int> CalendarIntervals = new()
+    {
+        ["Hver 4. time"] = 4 * 3_600_000,
+        ["Hver 6. time"] = 6 * 3_600_000,
+        ["Hver 12. time"] = 12 * 3_600_000,
     };
 
     private const string AutostartKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -65,9 +75,9 @@ class TrayApp
         _pollTimer.Interval = LoadConfig().TryGetValue("poll_interval", out var pi) ? (int)pi : 300_000;
         _pollTimer.Tick += async (_, _) => await DoFetchAsync();
 
-        // Kalender-synk hvert 60. minut, forskudt 30 min fra beskeder
+        // Kalender-synk (default hver 6. time)
         _calendarTimer = new System.Windows.Forms.Timer();
-        _calendarTimer.Interval = 3_600_000; // 1 time
+        _calendarTimer.Interval = LoadConfig().TryGetValue("calendar_interval", out var ci) ? (int)ci : 6 * 3_600_000;
         _calendarTimer.Tick += async (_, _) => await SyncAllCalendarsAsync();
     }
 
@@ -101,6 +111,9 @@ class TrayApp
                 .Where(s => !string.IsNullOrEmpty(s)));
             _tray.Text = $"AulaSync - {_api.UserName}";
 
+            // Start ICS-webserver
+            StartIcsServer();
+
             // Sæt menuen med det samme
             _tray.ContextMenuStrip = BuildMenu();
             ShowBalloon($"Logget ind som {_api.UserName}");
@@ -133,6 +146,7 @@ class TrayApp
 
             _pollTimer.Stop();
             _calendarTimer.Stop();
+            StopIcsServer();
 
             if (_quitRequested)
             {
@@ -188,9 +202,10 @@ class TrayApp
         {
             if (empMenu.DropDownItems.Count == 1 && empMenu.DropDownItems[0].Text == "Henter...")
             {
+                if (_api == null) return;
                 try
                 {
-                    var employees = await _api!.GetEmployeesAsync();
+                    var employees = await _api.GetEmployeesAsync();
                     empMenu.DropDownItems.Clear();
 
                     // Lærere+pædagoger først, derefter resten
@@ -241,9 +256,10 @@ class TrayApp
         {
             if (classMenu.DropDownItems.Count == 1 && classMenu.DropDownItems[0].Text == "Henter...")
             {
+                if (_api == null) return;
                 try
                 {
-                    var groups = await _api!.GetGroupsAsync();
+                    var groups = await _api.GetGroupsAsync();
                     classMenu.DropDownItems.Clear();
                     // Kun hovedgrupper (klasser)
                     foreach (var g in groups.Where(g => g.Type == "Hovedgruppe"))
@@ -251,8 +267,7 @@ class TrayApp
                         var captured = g;
                         var item = new ToolStripMenuItem(g.Name);
                         item.Click += async (_, _) => await FetchAndOpenCalendar(
-                            g.Name, () => FetchGroupCalendarInChunks(captured.Id),
-                            CalendarType.Class);
+                            g.Name, () => FetchGroupCalendarInChunks(captured.Id));
                         classMenu.DropDownItems.Add(item);
                     }
                 }
@@ -268,17 +283,17 @@ class TrayApp
         {
             if (roomMenu.DropDownItems.Count == 1 && roomMenu.DropDownItems[0].Text == "Henter...")
             {
+                if (_api == null) return;
                 try
                 {
-                    var resources = await _api!.GetResourcesAsync();
+                    var resources = await _api.GetResourcesAsync();
                     roomMenu.DropDownItems.Clear();
                     foreach (var r in resources)
                     {
                         var captured = r;
                         var item = new ToolStripMenuItem(r.Name);
                         item.Click += async (_, _) => await FetchAndOpenCalendar(
-                            r.Name, () => FetchResourceCalendarInChunks(captured.Id),
-                            CalendarType.Room);
+                            r.Name, () => FetchResourceCalendarInChunks(captured.Id));
                         roomMenu.DropDownItems.Add(item);
                     }
                 }
@@ -305,6 +320,20 @@ class TrayApp
             interval.DropDownItems.Add(item);
         }
         settings.DropDownItems.Add(interval);
+
+        var calInterval = new ToolStripMenuItem("Skema-synkronisering");
+        foreach (var (label, ms) in CalendarIntervals)
+        {
+            var c2 = ms;
+            var item2 = new ToolStripMenuItem(label, null, (_, _) =>
+            {
+                _calendarTimer.Interval = c2;
+                SaveConfigValue("calendar_interval", c2);
+            });
+            calInterval.DropDownOpening += (_, _) => item2.Checked = _calendarTimer.Interval == c2;
+            calInterval.DropDownItems.Add(item2);
+        }
+        settings.DropDownItems.Add(calInterval);
 
         var auto = new ToolStripMenuItem("Start ved login", null, (_, _) =>
             SetAutostart(!IsAutostartEnabled()));
@@ -358,7 +387,8 @@ class TrayApp
 
     private async Task DoFetchAsync()
     {
-        if (_api == null) return;
+        if (_api == null || _fetching) return;
+        _fetching = true;
         try
         {
             await _api.TestSessionAsync();
@@ -379,6 +409,10 @@ class TrayApp
         {
             _lastError = ex.Message;
             Log($"Fejl: {ex}");
+        }
+        finally
+        {
+            _fetching = false;
         }
     }
 
@@ -404,7 +438,7 @@ class TrayApp
         await FetchAndOpenCalendar(
             $"{emp.Initials} - {emp.Name}",
             () => FetchCalendarInChunks(emp.Id),
-            CalendarType.Employee);
+            emp.Initials);
     }
 
     private async Task<List<AulaApi.CalendarEvent>> FetchCalendarInChunks(string profileId)
@@ -449,14 +483,14 @@ class TrayApp
         return all;
     }
 
-    private enum CalendarType { Employee, Class, Room }
+    private static readonly string CalendarDir = Path.Combine(ConfigDir, "kalendere");
 
     private Task FetchAndOpenCalendar(string calendarName, Func<Task<List<AulaApi.CalendarEvent>>> fetchFunc,
-        CalendarType calendarType = CalendarType.Employee)
-        => FetchAndOpenCalendar(calendarName, fetchFunc, calendarType, silent: false);
+        string initials = "")
+        => FetchAndSaveIcs(calendarName, fetchFunc, initials, silent: false);
 
-    private async Task FetchAndOpenCalendar(string calendarName, Func<Task<List<AulaApi.CalendarEvent>>> fetchFunc,
-        CalendarType calendarType, bool silent)
+    private async Task FetchAndSaveIcs(string calendarName, Func<Task<List<AulaApi.CalendarEvent>>> fetchFunc,
+        string initials, bool silent)
     {
         try
         {
@@ -470,87 +504,38 @@ class TrayApp
                 return;
             }
 
-            if (!silent) ShowBalloon($"Henter skema for {calendarName}...");
+            _tray.Text = $"AulaSync - henter {calendarName}...";
             var events = await fetchFunc();
             Log($"Hentet {events.Count} events for {calendarName}");
 
             if (events.Count == 0)
             {
-                if (!silent) ShowBalloon($"Ingen skema fundet for {calendarName}");
+                if (!silent) _tray.Text = $"AulaSync - ingen skema for {calendarName}";
                 return;
             }
 
-            // Opret/opdatér kalender i Outlook via COM
-            await Task.Run(() =>
+            // Generér ICS-fil
+            var ics = AulaApi.EventsToIcs(events, calendarName, initials);
+            Directory.CreateDirectory(CalendarDir);
+            var safeFileName = string.Join("_", calendarName.Split(Path.GetInvalidFileNameChars()));
+            var icsPath = Path.Combine(CalendarDir, $"{safeFileName}.ics");
+
+            // Atomisk skrivning
+            var tmp = icsPath + ".tmp";
+            await File.WriteAllTextAsync(tmp, ics, System.Text.Encoding.UTF8);
+            File.Move(tmp, icsPath, true);
+
+            var icsUrl = $"http://localhost:{IcsPort}/{Uri.EscapeDataString(safeFileName)}.ics";
+            Log($"ICS gemt: {icsPath} ({events.Count} events) → {icsUrl}");
+
+            if (!silent)
             {
-                var groupName = $"Skemaer {_api!.Institution}";
-
-                dynamic outlook = Activator.CreateInstance(Type.GetTypeFromProgID("Outlook.Application")!)!;
-                dynamic ns = outlook.GetNamespace("MAPI");
-                dynamic calendar = ns.GetDefaultFolder(9);
-
-                // Find/opret kalender-mappe
-                dynamic? folder = null;
-                foreach (dynamic f in calendar.Folders)
-                    if (f.Name == calendarName) { folder = f; break; }
-                folder ??= calendar.Folders.Add(calendarName);
-
-                // Ryd eksisterende
-                while (folder.Items.Count > 0)
-                    folder.Items.Remove(1);
-
-                // Tilføj events
-                foreach (var ev in events)
-                {
-                    if (!DateTime.TryParse(ev.Start, System.Globalization.CultureInfo.InvariantCulture,
-                        System.Globalization.DateTimeStyles.RoundtripKind, out var dtStart)) continue;
-                    if (!DateTime.TryParse(ev.End, System.Globalization.CultureInfo.InvariantCulture,
-                        System.Globalization.DateTimeStyles.RoundtripKind, out var dtEnd)) continue;
-
-                    dynamic appt = outlook.CreateItem(1);
-                    // Tilpas format efter skematype
-                    var teacherInits = "";
-                    if (!string.IsNullOrEmpty(ev.Teacher))
-                    {
-                        var inits = System.Text.RegularExpressions.Regex.Matches(ev.Teacher, @"\((\w+)\)");
-                        teacherInits = string.Join(", ", inits.Select(m => m.Groups[1].Value));
-                    }
-                    appt.Subject = FormatEventTitle(ev.Title, ev.Location, ev.Groups, teacherInits, calendarType);
-                    appt.Start = dtStart;
-                    appt.End = dtEnd;
-                    appt.ReminderSet = false;
-                    appt.BusyStatus = 0;
-                    if (!string.IsNullOrEmpty(ev.Location)) appt.Location = ev.Location;
-                    var desc = new List<string>();
-                    if (!string.IsNullOrEmpty(ev.Teacher)) desc.Add(ev.Teacher);
-                    if (!string.IsNullOrEmpty(ev.Groups)) desc.Add($"Klasse: {ev.Groups}");
-                    if (desc.Count > 0) appt.Body = string.Join("\n", desc);
-                    appt.Save();
-                    appt.Move(folder);
-                }
-
-                // Flyt til "Skemaer {Institution}" gruppe
-                try
-                {
-                    dynamic calModule = outlook.ActiveExplorer().NavigationPane
-                        .Modules.GetNavigationModule(1);
-                    dynamic navGroups = calModule.NavigationGroups;
-
-                    dynamic? navGroup = null;
-                    foreach (dynamic g in navGroups)
-                        if (g.Name == groupName) { navGroup = g; break; }
-                    navGroup ??= navGroups.Create(groupName);
-
-                    bool found = false;
-                    foreach (dynamic f in navGroup.NavigationFolders)
-                        if (f.DisplayName == calendarName) { found = true; break; }
-                    if (!found)
-                        navGroup.NavigationFolders.Add(folder);
-                }
-                catch (Exception ex) { Log($"NavigationGroup: {ex.Message}"); }
-            });
-
-            if (!silent) ShowBalloon($"{events.Count} events for {calendarName}");
+                // Abonnér via webcal:// — Outlook håndterer subscription
+                var webcalUrl = $"webcal://localhost:{IcsPort}/{Uri.EscapeDataString(safeFileName)}.ics";
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                { FileName = webcalUrl, UseShellExecute = true });
+                _tray.Text = $"AulaSync - {_api?.UserName}";
+            }
         }
         catch (Exception ex)
         {
@@ -559,28 +544,52 @@ class TrayApp
         }
     }
 
-    private static string FormatEventTitle(string title, string location, string groups, string teacherInits, CalendarType type)
+    private void StartIcsServer()
     {
-        var parts = new List<string> { title };
-        switch (type)
+        try
         {
-            case CalendarType.Employee:
-                // Medarbejder: FAG; Lokale; Klasse (læreren ER kalenderen)
-                if (!string.IsNullOrEmpty(location)) parts.Add(location);
-                if (!string.IsNullOrEmpty(groups)) parts.Add(groups);
-                break;
-            case CalendarType.Class:
-                // Klasse: FAG; Lokale; INIT (klassen ER kalenderen)
-                if (!string.IsNullOrEmpty(location)) parts.Add(location);
-                if (!string.IsNullOrEmpty(teacherInits)) parts.Add(teacherInits);
-                break;
-            case CalendarType.Room:
-                // Lokale: FAG; Klasse; INIT (lokalet ER kalenderen)
-                if (!string.IsNullOrEmpty(groups)) parts.Add(groups);
-                if (!string.IsNullOrEmpty(teacherInits)) parts.Add(teacherInits);
-                break;
+            _httpListener = new System.Net.HttpListener();
+            _httpListener.Prefixes.Add($"http://localhost:{IcsPort}/");
+            _httpListener.Start();
+            _ = Task.Run(async () =>
+            {
+                while (_httpListener?.IsListening == true)
+                {
+                    try
+                    {
+                        var ctx = await _httpListener.GetContextAsync();
+                        var fileName = Uri.UnescapeDataString(ctx.Request.Url!.AbsolutePath.TrimStart('/'));
+                        var filePath = Path.Combine(CalendarDir, fileName);
+
+                        if (File.Exists(filePath) && filePath.EndsWith(".ics", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var data = await File.ReadAllBytesAsync(filePath);
+                            ctx.Response.ContentType = "text/calendar; charset=utf-8";
+                            ctx.Response.ContentLength64 = data.Length;
+                            await ctx.Response.OutputStream.WriteAsync(data);
+                        }
+                        else
+                        {
+                            ctx.Response.StatusCode = 404;
+                        }
+                        ctx.Response.Close();
+                    }
+                    catch (ObjectDisposedException) { break; }
+                    catch (Exception ex) { Log($"ICS-server fejl: {ex.Message}"); }
+                }
+            });
+            Log($"ICS-server startet på port {IcsPort}");
         }
-        return string.Join(" | ", parts);
+        catch (Exception ex)
+        {
+            Log($"ICS-server kunne ikke starte: {ex.Message}");
+        }
+    }
+
+    private void StopIcsServer()
+    {
+        try { _httpListener?.Stop(); _httpListener?.Close(); } catch { }
+        _httpListener = null;
     }
 
     private void ShowBalloon(string text)
@@ -627,10 +636,10 @@ class TrayApp
             if (!empById.TryGetValue(empId, out var emp)) continue;
             try
             {
-                await FetchAndOpenCalendar(
+                await FetchAndSaveIcs(
                     $"{emp.Initials} - {emp.Name}",
                     () => FetchCalendarInChunks(emp.Id),
-                    CalendarType.Employee, silent: true);
+                    emp.Initials, silent: true);
             }
             catch (Exception ex) { Log($"Sync fejl for {emp.Initials}: {ex.Message}"); }
         }
