@@ -300,7 +300,7 @@ public class IcsGenerationTests
         };
         var ics = AulaApi.EventsToIcs(events, "HL - Helle", "HL");
         Assert.Contains("BEGIN:VEVENT", ics);
-        Assert.Contains("SUMMARY:DAN (7A)", ics);
+        Assert.Contains("SUMMARY:DAN | 53 | 7A", ics);
         Assert.Contains("LOCATION:53", ics);
         Assert.Contains("UID:aula-1", ics);
         Assert.Contains("END:VEVENT", ics);

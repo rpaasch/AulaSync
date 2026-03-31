@@ -275,8 +275,8 @@ body {{ font-family: Segoe UI, sans-serif; font-size: 10pt; color: #333; margin:
                 if (DateTime.TryParse(m.Timestamp, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var mdt))
                     mTime = mdt.ToString("dd. MMM 'kl.' HH:mm", new CultureInfo("da-DK"));
                 var mRole = m.SenderMeta.Contains(" - ") ? m.SenderMeta.Split(" - ")[0] : "";
-                html += $"<div class='prev'><span class='sender'>{m.Sender}</span>";
-                if (!string.IsNullOrEmpty(mRole)) html += $" <span class='role'>({mRole})</span>";
+                html += $"<div class='prev'><span class='sender'>{System.Net.WebUtility.HtmlEncode(m.Sender)}</span>";
+                if (!string.IsNullOrEmpty(mRole)) html += $" <span class='role'>({System.Net.WebUtility.HtmlEncode(mRole)})</span>";
                 html += $"<span class='time'>{mTime}</span><br>{m.Text}</div>";
             }
             html += "</div>";

@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\AulaSync\AulaSync.csproj" />
+    <ProjectReference Include="..\AulaSync.csproj" />
   </ItemGroup>
 
   <ItemGroup>

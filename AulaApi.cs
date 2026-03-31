@@ -105,6 +105,7 @@ class AulaApi
             var json = await resp.Content.ReadAsStringAsync();
             JsonDocument doc;
             try { doc = JsonDocument.Parse(json); } catch { continue; }
+            using var _ = doc;
             if (!doc.RootElement.TryGetProperty("status", out var statusEl) ||
                 !statusEl.TryGetProperty("message", out var msgEl) ||
                 msgEl.GetString() != "OK") continue;
@@ -116,7 +117,7 @@ class AulaApi
                 if (ctxResp.IsSuccessStatusCode)
                 {
                     var ctxJson = await ctxResp.Content.ReadAsStringAsync();
-                    var ctxDoc = JsonDocument.Parse(ctxJson);
+                    using var ctxDoc = JsonDocument.Parse(ctxJson);
                     var ctxData = ctxDoc.RootElement.GetProperty("data");
                     var ip = ctxData.GetProperty("institutionProfile");
                     MyProfileId = ip.TryGetProperty("id", out var pid) ? pid.ToString() : "";
@@ -193,7 +194,7 @@ class AulaApi
                 $"{_apiUrl}?method=search.findProfilesAndGroups" +
                 $"&text={letter}&instCodes[]={InstitutionCode}&typeahead=true&limit=100" +
                 $"&portalRole=employee");
-            var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
             foreach (var p in doc.RootElement.GetProperty("data").GetProperty("results").EnumerateArray())
             {
                 var id = p.GetProperty("id").GetString() ?? "";
@@ -226,7 +227,7 @@ class AulaApi
             try
             {
                 var resp = await _client.GetAsync($"{_apiUrl}?method=profiles.getProfileMasterData&{query}&fromAdministration=false");
-                var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+                using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
                 if (doc.RootElement.TryGetProperty("data", out var data) &&
                     data.TryGetProperty("institutionProfiles", out var profiles))
                 {
@@ -302,8 +303,11 @@ class AulaApi
             sb.AppendLine($"UID:aula-{ev.Id}");
             sb.AppendLine($"DTSTART:{dtStart.ToUniversalTime():yyyyMMddTHHmmssZ}");
             sb.AppendLine($"DTEND:{dtEnd.ToUniversalTime():yyyyMMddTHHmmssZ}");
-            // Titel: "FAG (Klasse)" eller bare "FAG"
-            var summary = !string.IsNullOrEmpty(ev.Groups) ? $"{ev.Title} ({ev.Groups})" : ev.Title;
+            // Titel: FAG | Lokale | Klasse (medarbejder-perspektiv)
+            var titleParts = new List<string> { ev.Title };
+            if (!string.IsNullOrEmpty(ev.Location)) titleParts.Add(ev.Location);
+            if (!string.IsNullOrEmpty(ev.Groups)) titleParts.Add(ev.Groups);
+            var summary = string.Join(" | ", titleParts);
             sb.AppendLine($"SUMMARY:{IcsEscape(summary)}");
             if (!string.IsNullOrEmpty(ev.Location))
                 sb.AppendLine($"LOCATION:{IcsEscape(ev.Location)}");
@@ -358,7 +362,7 @@ class AulaApi
             {
                 var resp = await _client.GetAsync(
                     $"{_apiUrl}?method=search.findProfilesAndGroups&text={c}&instCodes[]={InstitutionCode}&typeahead=true&limit=100");
-                var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+                using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
                 var data = doc.RootElement.GetProperty("data");
                 if (data.ValueKind == JsonValueKind.Null) continue;
                 foreach (var p in data.GetProperty("results").EnumerateArray())
@@ -391,7 +395,7 @@ class AulaApi
             {
                 var resp = await _client.GetAsync(
                     $"{_apiUrl}?method=resources.listResources&query={c}&institutionCodes[]={InstitutionCode}");
-                var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+                using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
                 foreach (var r in doc.RootElement.GetProperty("data").EnumerateArray())
                 {
                     var id = r.GetProperty("id").ToString();
@@ -447,7 +451,7 @@ class AulaApi
 
     private List<CalendarEvent> ParseCalendarEvents(string responseBody)
     {
-        var doc = JsonDocument.Parse(responseBody);
+        using var doc = JsonDocument.Parse(responseBody);
         if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
             return new();
 
@@ -512,7 +516,7 @@ class AulaApi
             var resp = await _client.GetAsync(
                 $"{_apiUrl}?method=messaging.getThreads&sortOn=date&orderDirection=desc&page={page}");
             resp.EnsureSuccessStatusCode();
-            var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
             var threads = doc.RootElement.GetProperty("data").GetProperty("threads");
             if (threads.GetArrayLength() == 0) break;
             foreach (var t in threads.EnumerateArray())
@@ -629,7 +633,7 @@ class AulaApi
     {
         var resp = await _client.GetAsync($"{_apiUrl}?method=profiles.getProfilesByLogin");
         var json = await resp.Content.ReadAsStringAsync();
-        var doc = JsonDocument.Parse(json);
+        using var doc = JsonDocument.Parse(json);
         var code = doc.RootElement.GetProperty("status");
         if (code.TryGetProperty("code", out var c) && c.GetInt32() == 403)
             throw new UnauthorizedAccessException("Session udløbet");

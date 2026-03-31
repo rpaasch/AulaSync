@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="AulaSync.Tests" />
+    <Compile Remove="AulaSync.Tests\**" />
   </ItemGroup>
 
   <ItemGroup>
