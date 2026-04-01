@@ -41,6 +41,7 @@ class TrayApp
         ["Hver 12. time"] = 12 * 3_600_000,
     };
 
+    private const string AppVersion = "2.2.2";
     private const string AutostartKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string AutostartName = "AulaSync";
     private const string ProjectUrl = "https://github.com/rpaasch/AulaSync";
@@ -122,7 +123,15 @@ class TrayApp
 
             _header = string.Join(" - ", new[] { _api.UserName, _api.RoleDanish, _api.Institution }
                 .Where(s => !string.IsNullOrEmpty(s)));
-            _tray.Text = $"AulaSync - {_api.UserName}";
+            _tray.Text = $"AulaSync v{AppVersion} - {_api.UserName}";
+
+            // Tjek for opdatering i baggrunden
+            _ = Task.Run(async () =>
+            {
+                var newVer = await CheckForUpdateAsync();
+                if (newVer != null)
+                    ShowBalloon($"AulaSync v{newVer} er tilgængelig — opdatér via Indstillinger");
+            });
 
             // Start ICS-webserver
             StartIcsServer();
@@ -376,8 +385,26 @@ class TrayApp
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             { FileName = $"{ProjectUrl}#vejledning", UseShellExecute = true });
         });
-        var about = new ToolStripMenuItem("AulaSync v2.2.2") { Enabled = false };
+        var about = new ToolStripMenuItem($"AulaSync v{AppVersion}") { Enabled = false };
         settings.DropDownItems.Add(about);
+        var updateItem = new ToolStripMenuItem("Søg efter opdatering...", null, async (_, _) =>
+        {
+            var newVer = await CheckForUpdateAsync();
+            if (newVer != null)
+            {
+                var result = MessageBox.Show(
+                    $"AulaSync v{newVer} er tilgængelig (du har v{AppVersion}).\n\nVil du hente den?",
+                    "AulaSync - Opdatering", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                if (result == DialogResult.Yes)
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    { FileName = $"{ProjectUrl}/releases/latest", UseShellExecute = true });
+            }
+            else
+            {
+                ShowBalloon("Du har den nyeste version");
+            }
+        });
+        settings.DropDownItems.Add(updateItem);
 
         menu.Items.Add(settings);
 
@@ -628,6 +655,22 @@ class TrayApp
     private void ShowBalloon(string text)
     {
         _tray.ShowBalloonTip(3000, "AulaSync", text, ToolTipIcon.Info);
+    }
+
+    private static async Task<string?> CheckForUpdateAsync()
+    {
+        try
+        {
+            using var http = new HttpClient();
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("AulaSync");
+            var json = await http.GetStringAsync($"https://api.github.com/repos/rpaasch/AulaSync/releases/latest");
+            using var doc = JsonDocument.Parse(json);
+            var tag = doc.RootElement.GetProperty("tag_name").GetString()?.TrimStart('v') ?? "";
+            if (tag != "" && tag != AppVersion && string.Compare(tag, AppVersion, StringComparison.Ordinal) > 0)
+                return tag;
+        }
+        catch { }
+        return null;
     }
 
     private HashSet<string> _subscribedEmployees = new();
