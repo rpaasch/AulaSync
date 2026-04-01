@@ -33,6 +33,12 @@ Eller via winget (når godkendt):
 winget install rpaasch.AulaSync
 ```
 
+Kommunal udrulning (SCCM/Intune):
+```
+AulaSync.exe --silent
+```
+Starter i system tray uden login-vindue. Brugeren logger ind ved at klikke på ikonet.
+
 ## Vejledning
 
 ### Første gang
@@ -64,14 +70,15 @@ winget install rpaasch.AulaSync
 
 ### Skemaer i Outlook
 
-- Skemaer placeres i kalendergruppen **Skemaer {Institution}**
+- Skemaer leveres som ICS-kalendere via lokal webserver (port 9876)
 - Viser fag, lokale, klasse og lærer direkte i kalendervisningen
-- Opdateres automatisk hver time
+- Rullende sync: én kalender opdateres ad gangen for at skåne API'et
 
 ## Teknisk
 
 - **.NET 8** WinForms app med WebView2
-- **Outlook COM** til oprettelse af beskeder og kalenderaftaler
+- **Outlook COM/MAPI** til oprettelse af beskeder
+- **ICS + lokal HTTP-server** til kalender-subscriptions
 - **Direkte MAPI** (`mapi32.dll` P/Invoke) til korrekte tidsstempler
 - Aktiv profil hentes via `profiles.getProfileContext` (korrekt multi-institution)
 - Kalenderdata hentes i bidder af max 42 dage (API-begrænsning)
@@ -91,6 +98,10 @@ winget install rpaasch.AulaSync
 dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o publish
 ```
 
+## Disclaimer
+
+AulaSync er et uafhængigt open source-projekt og er **ikke affilieret med, godkendt af eller supporteret af Aula, KMD eller Kombit**. Appen bruger Aulas interne API, som ikke er offentligt dokumenteret og kan ændre sig uden varsel. Brug på eget ansvar.
+
 ## Data
 
 Konfiguration gemmes i `%USERPROFILE%\.aulasync\`:
@@ -101,4 +112,5 @@ Konfiguration gemmes i `%USERPROFILE%\.aulasync\`:
 | `aulasync.log` | Logfil (max 1 MB, roteres) |
 | `seen_threads.json` | Importerede beskeder |
 | `subscribed_calendars.json` | Abonnerede skemaer |
+| `kalendere/` | ICS-filer serveret via localhost:9876 |
 | `webview2/` | Browser-session (slettet ved logout) |
