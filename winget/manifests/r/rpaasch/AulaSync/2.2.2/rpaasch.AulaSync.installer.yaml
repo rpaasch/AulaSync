@@ -8,6 +8,6 @@ Commands:
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/rpaasch/AulaSync/releases/download/v2.2.2/AulaSync.exe
-    InstallerSha256: 745eb9d8d1705a36a3b84e8e8ab683c6bf6e85a5622d2840d0144b44d7578a74
+    InstallerSha256: 1ffaffa0735e44a8972df1ca59bddabebf627abfb53b3dacb758f9e670518775
 ManifestType: installer
 ManifestVersion: 1.6.0
