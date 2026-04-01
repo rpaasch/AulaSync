@@ -278,7 +278,7 @@ class AulaApi
         });
         Log($"Calendar POST: {profileIds.Count()} profiler, {startStr} - {endStr}");
 
-        var resp = await _client.PostAsync(
+        var resp = await PostWithRetryAsync(
             $"{_apiUrl}?method=calendar.getEventsByProfileIdsAndResourceIds",
             new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
         return ParseCalendarEvents(await resp.Content.ReadAsStringAsync());
@@ -287,39 +287,40 @@ class AulaApi
     public static string EventsToIcs(List<CalendarEvent> events, string name, string initials)
     {
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine("BEGIN:VCALENDAR");
-        sb.AppendLine("VERSION:2.0");
-        sb.AppendLine("PRODID:-//AulaSync//Calendar//DA");
-        sb.AppendLine($"X-WR-CALNAME:{name} ({initials})");
-        sb.AppendLine("CALSCALE:GREGORIAN");
-        sb.AppendLine("METHOD:PUBLISH");
+        sb.Append("BEGIN:VCALENDAR\r\n");
+        sb.Append("VERSION:2.0\r\n");
+        sb.Append("PRODID:-//AulaSync//Calendar//DA\r\n");
+        sb.Append($"X-WR-CALNAME:{name} ({initials})\r\n");
+        sb.Append("CALSCALE:GREGORIAN\r\n");
+        sb.Append("METHOD:PUBLISH\r\n");
 
+        var now = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
         foreach (var ev in events)
         {
             if (!DateTime.TryParse(ev.Start, out var dtStart)) continue;
             if (!DateTime.TryParse(ev.End, out var dtEnd)) continue;
 
-            sb.AppendLine("BEGIN:VEVENT");
-            sb.AppendLine($"UID:aula-{ev.Id}");
-            sb.AppendLine($"DTSTART:{dtStart.ToUniversalTime():yyyyMMddTHHmmssZ}");
-            sb.AppendLine($"DTEND:{dtEnd.ToUniversalTime():yyyyMMddTHHmmssZ}");
-            // Titel: FAG | Lokale | Klasse (medarbejder-perspektiv)
+            sb.Append("BEGIN:VEVENT\r\n");
+            sb.Append($"UID:aula-{ev.Id}@aulasync\r\n");
+            sb.Append($"DTSTAMP:{now}\r\n");
+            sb.Append($"DTSTART:{dtStart.ToUniversalTime():yyyyMMddTHHmmssZ}\r\n");
+            sb.Append($"DTEND:{dtEnd.ToUniversalTime():yyyyMMddTHHmmssZ}\r\n");
             var titleParts = new List<string> { ev.Title };
             if (!string.IsNullOrEmpty(ev.Location)) titleParts.Add(ev.Location);
             if (!string.IsNullOrEmpty(ev.Groups)) titleParts.Add(ev.Groups);
             var summary = string.Join(" | ", titleParts);
-            sb.AppendLine($"SUMMARY:{IcsEscape(summary)}");
+            sb.Append($"SUMMARY:{IcsEscape(summary)}\r\n");
             if (!string.IsNullOrEmpty(ev.Location))
-                sb.AppendLine($"LOCATION:{IcsEscape(ev.Location)}");
+                sb.Append($"LOCATION:{IcsEscape(ev.Location)}\r\n");
             var desc = new List<string>();
             if (!string.IsNullOrEmpty(ev.Teacher)) desc.Add(ev.Teacher);
             if (!string.IsNullOrEmpty(ev.Groups)) desc.Add($"Klasse: {ev.Groups}");
             if (!string.IsNullOrEmpty(ev.Location)) desc.Add($"Lokale: {ev.Location}");
-            if (desc.Count > 0) sb.AppendLine($"DESCRIPTION:{IcsEscape(string.Join(" | ", desc))}");
-            sb.AppendLine("END:VEVENT");
+            if (desc.Count > 0) sb.Append($"DESCRIPTION:{IcsEscape(string.Join(" | ", desc))}\r\n");
+            sb.Append("END:VEVENT\r\n");
         }
 
-        sb.AppendLine("END:VCALENDAR");
+        sb.Append("END:VCALENDAR\r\n");
         return sb.ToString();
     }
 
@@ -443,7 +444,7 @@ class AulaApi
             end = endStr,
         }, new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
 
-        var resp = await _client.PostAsync(
+        var resp = await PostWithRetryAsync(
             $"{_apiUrl}?method=calendar.getEventsByProfileIdsAndResourceIds",
             new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
         return ParseCalendarEvents(await resp.Content.ReadAsStringAsync());
@@ -549,6 +550,7 @@ class AulaApi
             doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
         }
         catch { return null; }
+        using var _doc = doc;
 
         var data = doc.RootElement.GetProperty("data");
         var messages = data.GetProperty("messages");

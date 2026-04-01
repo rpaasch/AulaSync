@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationIcon>Resources\icon.ico</ApplicationIcon>
-    <Version>2.1.1</Version>
+    <Version>2.2.2</Version>
     <AssemblyTitle>AulaSync</AssemblyTitle>
     <Description>Synkroniserer Aula-beskeder til Outlook</Description>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
@@ -21,7 +21,6 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
-    <PackageReference Include="HtmlAgilityPack" Version="1.11.72" />
   </ItemGroup>
 
 </Project>
