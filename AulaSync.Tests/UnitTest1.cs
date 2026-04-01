@@ -571,7 +571,7 @@ public class MultiInstitutionTests
     [Fact]
     public void ValidInstitutionCode()
     {
-        Assert.False(string.IsNullOrEmpty("257002"));
+        Assert.False(string.IsNullOrEmpty("101001"));
     }
 
     [Fact]
@@ -582,19 +582,19 @@ public class MultiInstitutionTests
         {
             "id": 9000001,
             "role": "employee",
-            "firstName": "Rasmus",
-            "lastName": "Paasch",
+            "firstName": "Test",
+            "lastName": "Bruger",
             "institution": {
-                "institutionCode": "257002",
-                "institutionName": "Testskolen"
+                "institutionCode": "101001",
+                "institutionName": "Test Skole"
             }
         }
         """;
         var doc = JsonDocument.Parse(json);
         var ip = doc.RootElement;
         Assert.True(ip.TryGetProperty("institution", out var instObj));
-        Assert.Equal("257002", instObj.GetProperty("institutionCode").GetString());
-        Assert.Equal("Testskolen", instObj.GetProperty("institutionName").GetString());
+        Assert.Equal("101001", instObj.GetProperty("institutionCode").GetString());
+        Assert.Equal("Test Skole", instObj.GetProperty("institutionName").GetString());
     }
 
     [Fact]
