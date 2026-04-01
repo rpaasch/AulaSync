@@ -10,7 +10,7 @@
     <ApplicationIcon>Resources\icon.ico</ApplicationIcon>
     <Version>2.2.2</Version>
     <AssemblyTitle>AulaSync</AssemblyTitle>
-    <Description>Synkroniserer Aula-beskeder til Outlook</Description>
+    <Description>Synkroniserer Aula-beskeder og skemaer til Outlook</Description>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 

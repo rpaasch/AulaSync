@@ -5,7 +5,10 @@ publish-single/
 publish-release/
 publish-standalone/
 *.zip
+*.exe
+*.pdb
 .vs/
+.claude/
 *.user
 Resources/icon.ico
 tools/

@@ -72,7 +72,7 @@ Starter i system tray uden login-vindue. Brugeren logger ind ved at klikke på i
 
 - Skemaer leveres som ICS-kalendere via lokal webserver (port 9876)
 - Viser fag, lokale, klasse og lærer direkte i kalendervisningen
-- Rullende sync: én kalender opdateres ad gangen for at skåne API'et
+- Rullende sync: én kalender opdateres ad gangen (konfigurerbar 4-12 timers cyklus)
 
 ## Teknisk
 
@@ -114,3 +114,11 @@ Konfiguration gemmes i `%USERPROFILE%\.aulasync\`:
 | `subscribed_calendars.json` | Abonnerede skemaer |
 | `kalendere/` | ICS-filer serveret via localhost:9876 |
 | `webview2/` | Browser-session (slettet ved logout) |
+
+## Fejl og forslag
+
+Opret et [issue på GitHub](https://github.com/rpaasch/AulaSync/issues) hvis du finder en fejl eller har et forslag.
+
+## Licens
+
+MIT License — se [LICENSE](LICENSE) for detaljer.
