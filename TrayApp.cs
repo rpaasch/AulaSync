@@ -85,6 +85,19 @@ class TrayApp
     {
         while (true)
         {
+            // Silent mode: vent på bruger-klik før login
+            if (Program.Silent)
+            {
+                _tray.Text = "AulaSync - klik for at logge ind";
+                Log("Silent mode - venter på bruger-klik");
+                var clicked = new TaskCompletionSource();
+                void handler(object? s, MouseEventArgs e) { clicked.TrySetResult(); }
+                _tray.MouseClick += handler;
+                await clicked.Task;
+                _tray.MouseClick -= handler;
+                Program.Silent = false; // Kun silent ved første start
+            }
+
             _tray.Text = "AulaSync - logger ind...";
 
             Log("Starter login...");
