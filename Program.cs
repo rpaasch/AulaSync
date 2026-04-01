@@ -5,9 +5,12 @@ static class Program
     static NotifyIcon Tray = null!;
     public static Form HiddenForm { get; private set; } = null!;
 
+    public static bool Silent { get; set; }
+
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
+        Silent = args.Any(a => a is "--silent" or "/silent" or "-silent");
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
