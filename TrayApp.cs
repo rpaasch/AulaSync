@@ -376,7 +376,7 @@ class TrayApp
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             { FileName = $"{ProjectUrl}#vejledning", UseShellExecute = true });
         });
-        var about = new ToolStripMenuItem("AulaSync v2.1.1") { Enabled = false };
+        var about = new ToolStripMenuItem("AulaSync v2.2.2") { Enabled = false };
         settings.DropDownItems.Add(about);
 
         menu.Items.Add(settings);
@@ -459,6 +459,17 @@ class TrayApp
             $"{emp.Initials} - {emp.Name}",
             () => FetchCalendarInChunks(emp.Id),
             emp.Initials);
+
+        // Tilføj til auto-sync subscriptions
+        if (_subscribedEmployees.Add(emp.Id))
+        {
+            SaveSubscriptions();
+            // Genberegn sync-interval
+            var totalCycleMs = LoadConfig().TryGetValue("calendar_interval", out var ci) ? (int)ci : 6 * 3_600_000;
+            _calendarTimer.Interval = Math.Max(totalCycleMs / _subscribedEmployees.Count, 1_800_000);
+            if (!_calendarTimer.Enabled) _calendarTimer.Start();
+            Log($"Subscription tilføjet: {emp.Initials} (total: {_subscribedEmployees.Count})");
+        }
     }
 
     private async Task<List<AulaApi.CalendarEvent>> FetchCalendarInChunks(string profileId)
@@ -579,9 +590,11 @@ class TrayApp
                     {
                         var ctx = await _httpListener.GetContextAsync();
                         var fileName = Uri.UnescapeDataString(ctx.Request.Url!.AbsolutePath.TrimStart('/'));
-                        var filePath = Path.Combine(CalendarDir, fileName);
+                        var filePath = Path.GetFullPath(Path.Combine(CalendarDir, fileName));
 
-                        if (File.Exists(filePath) && filePath.EndsWith(".ics", StringComparison.OrdinalIgnoreCase))
+                        // Sikkerhed: forhindre path traversal
+                        if (filePath.StartsWith(Path.GetFullPath(CalendarDir), StringComparison.OrdinalIgnoreCase)
+                            && File.Exists(filePath) && filePath.EndsWith(".ics", StringComparison.OrdinalIgnoreCase))
                         {
                             var data = await File.ReadAllBytesAsync(filePath);
                             ctx.Response.ContentType = "text/calendar; charset=utf-8";
@@ -732,7 +745,7 @@ class TrayApp
             using var key = Registry.CurrentUser.OpenSubKey(AutostartKey, true);
             if (key == null) return;
             if (enabled)
-                key.SetValue(AutostartName, Application.ExecutablePath);
+                key.SetValue(AutostartName, $"\"{Application.ExecutablePath}\" --silent");
             else
                 key.DeleteValue(AutostartName, false);
         }

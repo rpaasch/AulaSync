@@ -302,7 +302,8 @@ public class IcsGenerationTests
         Assert.Contains("BEGIN:VEVENT", ics);
         Assert.Contains("SUMMARY:DAN | 53 | 7A", ics);
         Assert.Contains("LOCATION:53", ics);
-        Assert.Contains("UID:aula-1", ics);
+        Assert.Contains("UID:aula-1@aulasync", ics);
+        Assert.Contains("DTSTAMP:", ics);
         Assert.Contains("END:VEVENT", ics);
         Assert.Contains("Helle (HL)", ics);
         Assert.Contains("Klasse: 7A", ics);
