@@ -5,6 +5,9 @@ PackageVersion: 2.3.0
 InstallerType: portable
 Commands:
   - AulaSync
+InstallerSwitches:
+  Silent: --silent
+  SilentWithProgress: --silent
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/rpaasch/AulaSync/releases/download/v2.3.0/AulaSync.exe
