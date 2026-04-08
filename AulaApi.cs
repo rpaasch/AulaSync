@@ -222,11 +222,11 @@ class AulaApi
         // Batch i grupper af 20
         for (int i = 0; i < idsToResolve.Count; i += 20)
         {
-            var batch = idsToResolve.Skip(i).Take(20);
+            var batch = idsToResolve.Skip(i).Take(20).ToList();
             var query = string.Join("&", batch.Select(id => $"instProfileIds[]={id}"));
             try
             {
-                var resp = await _client.GetAsync($"{_apiUrl}?method=profiles.getProfileMasterData&{query}&fromAdministration=false");
+                var resp = await GetWithRetryAsync($"{_apiUrl}?method=profiles.getProfileMasterData&{query}&fromAdministration=false");
                 using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
                 if (doc.RootElement.TryGetProperty("data", out var data) &&
                     data.TryGetProperty("institutionProfiles", out var profiles))
@@ -251,12 +251,19 @@ class AulaApi
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Batch fejlede - behold search-data for disse IDs
+                Log($"Resolution batch fejlede ({batch.Count} IDs): {ex.Message}");
+                foreach (var id in batch)
+                    if (employees.TryGetValue(id, out var emp) && !resolved.ContainsKey(id))
+                        resolved[id] = emp;
+            }
         }
 
         // Brug resolved hvis tilgængelig, ellers original
         var final = resolved.Count > 0 ? resolved : employees;
-        Log($"Fandt {final.Count} medarbejdere (resolved: {resolved.Count})");
+        Log($"Fandt {final.Count} medarbejdere (søg: {employees.Count}, resolved: {resolved.Count})");
 
         return final.Values
             .Where(e => e.Role is "teacher" or "preschool-teacher" or "leader" or "other")
@@ -290,7 +297,7 @@ class AulaApi
         sb.Append("BEGIN:VCALENDAR\r\n");
         sb.Append("VERSION:2.0\r\n");
         sb.Append("PRODID:-//AulaSync//Calendar//DA\r\n");
-        sb.Append($"X-WR-CALNAME:{name} ({initials})\r\n");
+        sb.Append($"X-WR-CALNAME:{name}\r\n");
         sb.Append("CALSCALE:GREGORIAN\r\n");
         sb.Append("METHOD:PUBLISH\r\n");
 
@@ -305,7 +312,9 @@ class AulaApi
             sb.Append($"DTSTAMP:{now}\r\n");
             sb.Append($"DTSTART:{dtStart.ToUniversalTime():yyyyMMddTHHmmssZ}\r\n");
             sb.Append($"DTEND:{dtEnd.ToUniversalTime():yyyyMMddTHHmmssZ}\r\n");
-            var titleParts = new List<string> { ev.Title };
+            var titleParts = new List<string>();
+            if (ev.IsSubstitute) titleParts.Add("Vikar");
+            titleParts.Add(ev.Title);
             if (!string.IsNullOrEmpty(ev.Location)) titleParts.Add(ev.Location);
             if (!string.IsNullOrEmpty(ev.Groups)) titleParts.Add(ev.Groups);
             var summary = string.Join(" | ", titleParts);
@@ -313,6 +322,8 @@ class AulaApi
             if (!string.IsNullOrEmpty(ev.Location))
                 sb.Append($"LOCATION:{IcsEscape(ev.Location)}\r\n");
             var desc = new List<string>();
+            if (ev.IsSubstitute && !string.IsNullOrEmpty(ev.SubstituteFor))
+                desc.Add($"Vikar for: {ev.SubstituteFor}");
             if (!string.IsNullOrEmpty(ev.Teacher)) desc.Add(ev.Teacher);
             if (!string.IsNullOrEmpty(ev.Groups)) desc.Add($"Klasse: {ev.Groups}");
             if (!string.IsNullOrEmpty(ev.Location)) desc.Add($"Lokale: {ev.Location}");
@@ -336,6 +347,8 @@ class AulaApi
         public string Teacher { get; set; } = "";
         public string Groups { get; set; } = "";
         public string Location { get; set; } = "";
+        public bool IsSubstitute { get; set; }
+        public string SubstituteFor { get; set; } = "";
         public List<string> BelongsToProfiles { get; set; } = new();
     }
 
@@ -462,16 +475,28 @@ class AulaApi
             try
             {
                 var teacher = "";
-                if (ev.TryGetProperty("lesson", out var les) && les.TryGetProperty("participants", out var parts))
+                var isSubstitute = false;
+                var substituteFor = "";
+                if (ev.TryGetProperty("lesson", out var les))
                 {
-                    var names = new List<string>();
-                    foreach (var p in parts.EnumerateArray())
+                    isSubstitute = les.TryGetProperty("lessonStatus", out var ls) && ls.GetString() == "substitute";
+
+                    if (les.TryGetProperty("participants", out var parts))
                     {
-                        var tn = p.TryGetProperty("teacherName", out var tn2) ? tn2.GetString() ?? "" : "";
-                        var ti = p.TryGetProperty("teacherInitials", out var ti2) ? ti2.GetString() ?? "" : "";
-                        if (tn != "") names.Add($"{tn} ({ti})");
+                        var names = new List<string>();
+                        foreach (var p in parts.EnumerateArray())
+                        {
+                            var tn = p.TryGetProperty("teacherName", out var tn2) ? tn2.GetString() ?? "" : "";
+                            var ti = p.TryGetProperty("teacherInitials", out var ti2) ? ti2.GetString() ?? "" : "";
+                            var role = p.TryGetProperty("participantRole", out var pr) ? pr.GetString() ?? "" : "";
+                            if (tn == "") continue;
+                            if (isSubstitute && role == "primaryTeacher")
+                                substituteFor = $"{tn} ({ti})";
+                            else
+                                names.Add($"{tn} ({ti})");
+                        }
+                        teacher = string.Join(", ", names);
                     }
-                    teacher = string.Join(", ", names);
                 }
 
                 var groups = "";
@@ -489,6 +514,9 @@ class AulaApi
                         belongsTo.Add(p.ToString());
 
                 var location = ev.TryGetProperty("primaryResourceText", out var prt) ? prt.GetString() ?? "" : "";
+                if (string.IsNullOrEmpty(location) && ev.TryGetProperty("primaryResource", out var pr2)
+                    && pr2.TryGetProperty("name", out var prName))
+                    location = prName.GetString() ?? "";
 
                 events.Add(new CalendarEvent
                 {
@@ -499,6 +527,8 @@ class AulaApi
                     Teacher = teacher,
                     Groups = groups,
                     Location = location,
+                    IsSubstitute = isSubstitute,
+                    SubstituteFor = substituteFor,
                     BelongsToProfiles = belongsTo,
                 });
             }

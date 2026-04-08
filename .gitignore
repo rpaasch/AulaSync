@@ -9,6 +9,7 @@ publish-standalone/
 *.pdb
 .vs/
 .claude/
+CLAUDE.md
 *.user
 Resources/icon.ico
 tools/
