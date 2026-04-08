@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationIcon>Resources\icon.ico</ApplicationIcon>
-    <Version>2.2.2</Version>
+    <Version>2.3.0</Version>
     <AssemblyTitle>AulaSync</AssemblyTitle>
     <Description>Synkroniserer Aula-beskeder og skemaer til Outlook</Description>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>

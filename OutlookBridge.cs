@@ -60,6 +60,18 @@ class OutlookBridge
         catch { }
     }
 
+    public static HashSet<string> GetSeenThreadIds()
+    {
+        var seen = LoadSeen();
+        var ids = new HashSet<string>();
+        foreach (var key in seen.Keys)
+        {
+            var sep = key.IndexOf('_');
+            if (sep > 0) ids.Add(key[..sep]);
+        }
+        return ids;
+    }
+
     private static Dictionary<string, JsonElement> LoadSeen()
     {
         Directory.CreateDirectory(ConfigDir);
@@ -226,6 +238,142 @@ class OutlookBridge
     {
         if (File.Exists(SeenFilePath)) File.Delete(SeenFilePath);
     }
+
+    public static HashSet<string> GetInternetCalendarNames()
+    {
+        var names = new HashSet<string>();
+        try
+        {
+            dynamic outlook = Activator.CreateInstance(Type.GetTypeFromProgID("Outlook.Application")!)!;
+            dynamic explorer = outlook.ActiveExplorer();
+            if (explorer == null)
+            {
+                Log("GetInternetCalendarNames: ActiveExplorer er null");
+                return names;
+            }
+            dynamic calModule = explorer.NavigationPane.Modules.GetNavigationModule(1);
+            dynamic navGroups = calModule.NavigationGroups;
+            for (int g = 1; g <= navGroups.Count; g++)
+            {
+                var grp = navGroups[g];
+                for (int f = 1; f <= grp.NavigationFolders.Count; f++)
+                {
+                    try { names.Add((string)grp.NavigationFolders[f].DisplayName); } catch { }
+                }
+            }
+            Log($"Outlook kalendere ({names.Count}): {string.Join(", ", names)}");
+        }
+        catch (Exception ex) { Log($"GetInternetCalendarNames fejl: {ex.Message}"); }
+        return names;
+    }
+
+    public static bool MoveCalendarToGroup(string calendarName, string groupName)
+    {
+        try
+        {
+            dynamic outlook = Activator.CreateInstance(Type.GetTypeFromProgID("Outlook.Application")!)!;
+            dynamic explorer = outlook.ActiveExplorer();
+            if (explorer == null)
+            {
+                Log($"MoveCalendarToGroup: ActiveExplorer er null - kan ikke flytte '{calendarName}'");
+                return false;
+            }
+            dynamic calModule = explorer.NavigationPane.Modules.GetNavigationModule(1); // olModuleCalendar
+            dynamic navGroups = calModule.NavigationGroups;
+
+            // Find eller opret målgruppen
+            dynamic targetGroup = null;
+            for (int i = 1; i <= navGroups.Count; i++)
+            {
+                if (navGroups[i].Name == groupName)
+                { targetGroup = navGroups[i]; break; }
+            }
+            targetGroup ??= navGroups.Create(groupName);
+
+            // Søg i alle eksisterende grupper efter kalenderen
+            for (int g = 1; g <= navGroups.Count; g++)
+            {
+                var grp = navGroups[g];
+                if (grp.Name == groupName) continue; // spring målgruppen over
+
+                for (int f = grp.NavigationFolders.Count; f >= 1; f--)
+                {
+                    try
+                    {
+                        var navFolder = grp.NavigationFolders[f];
+                        string displayName = navFolder.DisplayName;
+                        if (MatchesCalendarName(displayName, calendarName))
+                        {
+                            // Hent folder-objektet og tilføj til målgruppe
+                            dynamic folder = navFolder.Folder;
+                            targetGroup.NavigationFolders.Add(folder);
+                            // Fjern fra den gamle gruppe
+                            grp.NavigationFolders.Remove(navFolder);
+                            Log($"Kalender '{displayName}' flyttet til gruppe '{groupName}'");
+                            return true;
+                        }
+                    }
+                    catch { }
+                }
+            }
+            Log($"Kalender '{calendarName}' ikke fundet i Outlook (endnu)");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log($"Kunne ikke flytte kalender til gruppe: {ex.Message}");
+            return false;
+        }
+    }
+
+    public static bool RemoveInternetCalendar(string name)
+    {
+        try
+        {
+            dynamic outlook = Activator.CreateInstance(Type.GetTypeFromProgID("Outlook.Application")!)!;
+            dynamic explorer = outlook.ActiveExplorer();
+            if (explorer == null)
+            {
+                Log($"RemoveInternetCalendar: ActiveExplorer er null - kan ikke fjerne '{name}'");
+                return false;
+            }
+            dynamic calModule = explorer.NavigationPane.Modules.GetNavigationModule(1);
+            dynamic navGroups = calModule.NavigationGroups;
+            for (int g = 1; g <= navGroups.Count; g++)
+            {
+                var grp = navGroups[g];
+                for (int f = grp.NavigationFolders.Count; f >= 1; f--)
+                {
+                    try
+                    {
+                        var navFolder = grp.NavigationFolders[f];
+                        if (MatchesCalendarName(navFolder.DisplayName, name))
+                        {
+                            dynamic folder = navFolder.Folder;
+                            folder.Delete();
+                            Log($"Outlook-kalender fjernet: {navFolder.DisplayName}");
+                            // Fortsæt for at fjerne evt. duplikater
+                        }
+                    }
+                    catch { }
+                }
+            }
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log($"Kunne ikke fjerne kalender: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Matcher kalendernavne — håndterer Outlook's "(N)" suffix ved duplikater.
+    /// </summary>
+    private static bool MatchesCalendarName(string outlookName, string expectedName)
+        => outlookName == expectedName
+            || (outlookName.StartsWith(expectedName) && outlookName.Length > expectedName.Length
+                && outlookName[expectedName.Length] == ' ' && outlookName[expectedName.Length + 1] == '(');
 
     private static string FormatHtml(AulaMessage msg)
     {
