@@ -367,6 +367,39 @@ class OutlookBridge
         }
     }
 
+    public static bool RenameCalendar(string currentName, string newName)
+    {
+        try
+        {
+            dynamic outlook = Activator.CreateInstance(Type.GetTypeFromProgID("Outlook.Application")!)!;
+            dynamic explorer = outlook.ActiveExplorer();
+            if (explorer == null) return false;
+            dynamic calModule = explorer.NavigationPane.Modules.GetNavigationModule(1);
+            dynamic navGroups = calModule.NavigationGroups;
+            for (int g = 1; g <= navGroups.Count; g++)
+            {
+                var grp = navGroups[g];
+                for (int f = 1; f <= grp.NavigationFolders.Count; f++)
+                {
+                    try
+                    {
+                        var navFolder = grp.NavigationFolders[f];
+                        if (MatchesCalendarName(navFolder.DisplayName, currentName))
+                        {
+                            dynamic folder = navFolder.Folder;
+                            folder.Name = newName;
+                            Log($"Kalender omdøbt: '{currentName}' → '{newName}'");
+                            return true;
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch (Exception ex) { Log($"Rename fejl: {ex.Message}"); }
+        return false;
+    }
+
     /// <summary>
     /// Matcher kalendernavne — håndterer Outlook's "(N)" suffix ved duplikater.
     /// </summary>

@@ -41,6 +41,8 @@ class TrayApp
         ["Hver 12. time"] = 12 * 3_600_000,
     };
 
+    private const string CalSuffix = " (Aula)";  // ASCII — til ICS X-WR-CALNAME
+    private const string CalDisplay = " \u25B2"; // ▲ — Unicode display-navn via COM
     private const string AppVersion = "2.3.0";
     private const string AutostartKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string AutostartName = "AulaSync";
@@ -148,11 +150,11 @@ class TrayApp
             _pollTimer.Start();
 
             // Start rullende kalender-synk forskudt 5 min
-            if (_subscribedEmployees.Count > 0)
+            if (TotalSubscriptions > 0)
             {
                 // Fordel synk jævnt: total cyklus (default 6t) / antal subscriptions, min 30 min
                 RecalcCalendarInterval();
-                Log($"Kalender-sync: {_subscribedEmployees.Count} skemaer, interval {_calendarTimer.Interval / 60000} min");
+                Log($"Kalender-sync: {TotalSubscriptions} skemaer, interval {_calendarTimer.Interval / 60000} min");
 
                 var calStartDelay = new System.Windows.Forms.Timer { Interval = 300_000 }; // 5 min
                 calStartDelay.Tick += (_, _) =>
@@ -187,6 +189,8 @@ class TrayApp
             _httpClient?.Dispose();
             _httpClient = null;
             _cachedEmployees = null;
+            _cachedGroups = null;
+            _cachedResources = null;
             _syncIndex = 0;
         }
     }
@@ -251,7 +255,7 @@ class TrayApp
                     {
                         var c = emp;
                         var isSub = _subscribedEmployees.Contains(c.Id);
-                        var item = new ToolStripMenuItem($"{emp.Initials} - {emp.Name}");
+                        var item = new ToolStripMenuItem($"{emp.Initials} {emp.Name}");
                         if (isSub) item.Checked = true;
                         item.Click += async (_, _) =>
                         {
@@ -261,11 +265,12 @@ class TrayApp
                                 CancelMoveTimer(c.Id);
                                 SaveSubscriptions();
                                 RecalcCalendarInterval();
-                                var calName = $"{c.Initials} - {c.Name}";
+                                var calName = EmpCalName(c.Initials, c.Name);
                                 var safeName = string.Join("_", calName.Split(Path.GetInvalidFileNameChars()));
                                 var icsFile = Path.Combine(CalendarDir, $"{safeName}.ics");
                                 try { if (File.Exists(icsFile)) File.Delete(icsFile); } catch { }
                                 OutlookBridge.RemoveInternetCalendar(calName);
+                                OutlookBridge.RemoveInternetCalendar(calName.Replace(CalSuffix, CalDisplay));
                                 ShowBalloon($"Skema fjernet: {c.Initials}");
                                 Log($"Subscription fjernet: {c.Initials}");
                             }
@@ -302,25 +307,56 @@ class TrayApp
         classMenu.DropDownItems.Add("Henter...");
         classMenu.DropDownOpening += async (_, _) =>
         {
-            if (classMenu.DropDownItems.Count == 1 && classMenu.DropDownItems[0].Text == "Henter...")
+            if (_api == null) return;
+            try
             {
-                if (_api == null) return;
-                try
+                if (_cachedGroups == null)
+                    _cachedGroups = await _api.GetGroupsAsync();
+                var groups = _cachedGroups;
+
+                classMenu.DropDownItems.Clear();
+                // Kun hovedgrupper (klasser)
+                foreach (var g in groups.Where(g => g.Type == "Hovedgruppe"))
                 {
-                    var groups = await _api.GetGroupsAsync();
-                    classMenu.DropDownItems.Clear();
-                    // Kun hovedgrupper (klasser)
-                    foreach (var g in groups.Where(g => g.Type == "Hovedgruppe"))
+                    var captured = g;
+                    var isSub = _subscribedGroups.ContainsKey(captured.Id);
+                    var item = new ToolStripMenuItem(g.Name);
+                    if (isSub) item.Checked = true;
+                    item.Click += async (_, _) =>
                     {
-                        var captured = g;
-                        var item = new ToolStripMenuItem(g.Name);
-                        item.Click += async (_, _) => await FetchAndOpenCalendar(
-                            g.Name, () => FetchGroupCalendarInChunks(captured.Id));
-                        classMenu.DropDownItems.Add(item);
-                    }
+                        if (_subscribedGroups.ContainsKey(captured.Id))
+                        {
+                            _subscribedGroups.Remove(captured.Id);
+                            CancelMoveTimer(captured.Id);
+                            SaveSubscriptions();
+                            RecalcCalendarInterval();
+                            var calName = CalName(captured.Name);
+                            var safeName = string.Join("_", calName.Split(Path.GetInvalidFileNameChars()));
+                            var icsFile = Path.Combine(CalendarDir, $"{safeName}.ics");
+                            try { if (File.Exists(icsFile)) File.Delete(icsFile); } catch { }
+                            OutlookBridge.RemoveInternetCalendar(calName);
+                            OutlookBridge.RemoveInternetCalendar(calName.Replace(CalSuffix, CalDisplay));
+                            ShowBalloon($"Skema fjernet: {captured.Name}");
+                            Log($"Gruppe-subscription fjernet: {captured.Name}");
+                        }
+                        else
+                        {
+                            await FetchAndOpenCalendar(
+                                CalName(captured.Name), () => FetchGroupCalendarInChunks(captured.Id),
+                                empId: captured.Id);
+                            if (_subscribedGroups.TryAdd(captured.Id, CalName(captured.Name)))
+                            {
+                                SaveSubscriptions();
+                                RecalcCalendarInterval();
+                                if (!_calendarTimer.Enabled) _calendarTimer.Start();
+                                Log($"Gruppe-subscription tilføjet: {captured.Name} (total: {TotalSubscriptions})");
+                            }
+                        }
+                    };
+                    classMenu.DropDownItems.Add(item);
                 }
-                catch (Exception ex) { classMenu.DropDownItems.Clear(); classMenu.DropDownItems.Add($"Fejl: {ex.Message}"); }
             }
+            catch (Exception ex) { classMenu.DropDownItems.Clear(); classMenu.DropDownItems.Add($"Fejl: {ex.Message}"); }
         };
         menu.Items.Add(classMenu);
 
@@ -329,24 +365,55 @@ class TrayApp
         roomMenu.DropDownItems.Add("Henter...");
         roomMenu.DropDownOpening += async (_, _) =>
         {
-            if (roomMenu.DropDownItems.Count == 1 && roomMenu.DropDownItems[0].Text == "Henter...")
+            if (_api == null) return;
+            try
             {
-                if (_api == null) return;
-                try
+                if (_cachedResources == null)
+                    _cachedResources = await _api.GetResourcesAsync();
+                var resources = _cachedResources;
+
+                roomMenu.DropDownItems.Clear();
+                foreach (var r in resources)
                 {
-                    var resources = await _api.GetResourcesAsync();
-                    roomMenu.DropDownItems.Clear();
-                    foreach (var r in resources)
+                    var captured = r;
+                    var isSub = _subscribedResources.ContainsKey(captured.Id);
+                    var item = new ToolStripMenuItem(r.Name);
+                    if (isSub) item.Checked = true;
+                    item.Click += async (_, _) =>
                     {
-                        var captured = r;
-                        var item = new ToolStripMenuItem(r.Name);
-                        item.Click += async (_, _) => await FetchAndOpenCalendar(
-                            r.Name, () => FetchResourceCalendarInChunks(captured.Id));
-                        roomMenu.DropDownItems.Add(item);
-                    }
+                        if (_subscribedResources.ContainsKey(captured.Id))
+                        {
+                            _subscribedResources.Remove(captured.Id);
+                            CancelMoveTimer(captured.Id);
+                            SaveSubscriptions();
+                            RecalcCalendarInterval();
+                            var calName = CalName(captured.Name);
+                            var safeName = string.Join("_", calName.Split(Path.GetInvalidFileNameChars()));
+                            var icsFile = Path.Combine(CalendarDir, $"{safeName}.ics");
+                            try { if (File.Exists(icsFile)) File.Delete(icsFile); } catch { }
+                            OutlookBridge.RemoveInternetCalendar(calName);
+                            OutlookBridge.RemoveInternetCalendar(calName.Replace(CalSuffix, CalDisplay));
+                            ShowBalloon($"Skema fjernet: {captured.Name}");
+                            Log($"Ressource-subscription fjernet: {captured.Name}");
+                        }
+                        else
+                        {
+                            await FetchAndOpenCalendar(
+                                CalName(captured.Name), () => FetchResourceCalendarInChunks(captured.Id),
+                                empId: captured.Id);
+                            if (_subscribedResources.TryAdd(captured.Id, CalName(captured.Name)))
+                            {
+                                SaveSubscriptions();
+                                RecalcCalendarInterval();
+                                if (!_calendarTimer.Enabled) _calendarTimer.Start();
+                                Log($"Ressource-subscription tilføjet: {captured.Name} (total: {TotalSubscriptions})");
+                            }
+                        }
+                    };
+                    roomMenu.DropDownItems.Add(item);
                 }
-                catch (Exception ex) { roomMenu.DropDownItems.Clear(); roomMenu.DropDownItems.Add($"Fejl: {ex.Message}"); }
             }
+            catch (Exception ex) { roomMenu.DropDownItems.Clear(); roomMenu.DropDownItems.Add($"Fejl: {ex.Message}"); }
         };
         menu.Items.Add(roomMenu);
 
@@ -452,7 +519,7 @@ class TrayApp
         var parts = new List<string>();
         parts.Add(_totalImported == 1 ? "1 ny besked" : $"{_totalImported} nye beskeder");
         if (_lastPoll.HasValue) parts.Add($"sidst tjekket {_lastPoll.Value:HH:mm}");
-        var sc = _subscribedEmployees.Count;
+        var sc = TotalSubscriptions;
         if (sc > 0) parts.Add(sc == 1 ? "1 skema" : $"{sc} skemaer");
         if (_lastError != null) parts.Add($"fejl: {_lastError}");
         return string.Join(" · ", parts);
@@ -524,7 +591,7 @@ class TrayApp
     {
         CancelMoveTimer(emp.Id); // Cancel evt. eksisterende move-timer
         await FetchAndOpenCalendar(
-            $"{emp.Initials} - {emp.Name}",
+            EmpCalName(emp.Initials, emp.Name),
             () => FetchCalendarInChunks(emp.Id),
             emp.Initials,
             emp.Id);
@@ -639,13 +706,23 @@ class TrayApp
 
                     // Flyt til institutionsgruppe efter Outlook har tilføjet den (på UI-tråden med retry)
                     var institution = _api?.Institution ?? "AulaSync";
+                    var displayName = calendarName.Replace(CalSuffix, CalDisplay);
                     var moveRetries = 0;
                     var moveTimer = new System.Windows.Forms.Timer { Interval = 10_000 };
                     moveTimer.Tick += (_, _) =>
                     {
                         moveRetries++;
-                        if (OutlookBridge.MoveCalendarToGroup(calendarName, institution) || moveRetries >= 6)
+                        if (OutlookBridge.MoveCalendarToGroup(calendarName, institution))
                         {
+                            OutlookBridge.RenameCalendar(calendarName, displayName);
+                            moveTimer.Stop();
+                            moveTimer.Dispose();
+                            if (empId != null) _moveTimers.Remove(empId);
+                        }
+                        else if (moveRetries >= 6)
+                        {
+                            // Prøv rename alligevel (kalenderen kan findes men ikke flyttes)
+                            OutlookBridge.RenameCalendar(calendarName, displayName);
                             moveTimer.Stop();
                             moveTimer.Dispose();
                             if (empId != null) _moveTimers.Remove(empId);
@@ -741,15 +818,35 @@ class TrayApp
     }
 
     private HashSet<string> _subscribedEmployees = new();
+    private Dictionary<string, string> _subscribedGroups = new(); // id → calendarName
+    private Dictionary<string, string> _subscribedResources = new(); // id → calendarName
     private readonly Dictionary<string, System.Windows.Forms.Timer> _moveTimers = new();
+
+    private int TotalSubscriptions => _subscribedEmployees.Count + _subscribedGroups.Count + _subscribedResources.Count;
 
     private void LoadSubscriptions()
     {
         try
         {
             var file = Path.Combine(ConfigDir, "subscribed_calendars.json");
-            if (File.Exists(file))
-                _subscribedEmployees = JsonSerializer.Deserialize<HashSet<string>>(File.ReadAllText(file)) ?? new();
+            if (!File.Exists(file)) return;
+            var json = File.ReadAllText(file).Trim();
+            if (json.StartsWith("["))
+            {
+                // Backward compat: old format was just an array of employee ids
+                _subscribedEmployees = JsonSerializer.Deserialize<HashSet<string>>(json) ?? new();
+            }
+            else
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("employees", out var emp))
+                    _subscribedEmployees = JsonSerializer.Deserialize<HashSet<string>>(emp.GetRawText()) ?? new();
+                if (root.TryGetProperty("groups", out var grp))
+                    _subscribedGroups = JsonSerializer.Deserialize<Dictionary<string, string>>(grp.GetRawText()) ?? new();
+                if (root.TryGetProperty("resources", out var res))
+                    _subscribedResources = JsonSerializer.Deserialize<Dictionary<string, string>>(res.GetRawText()) ?? new();
+            }
         }
         catch { }
     }
@@ -759,13 +856,21 @@ class TrayApp
         try
         {
             Directory.CreateDirectory(ConfigDir);
+            var data = new Dictionary<string, object>
+            {
+                ["employees"] = _subscribedEmployees,
+                ["groups"] = _subscribedGroups,
+                ["resources"] = _subscribedResources
+            };
             File.WriteAllText(Path.Combine(ConfigDir, "subscribed_calendars.json"),
-                JsonSerializer.Serialize(_subscribedEmployees, new JsonSerializerOptions { WriteIndented = true }));
+                JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch { }
     }
 
     private List<AulaApi.Employee>? _cachedEmployees;
+    private List<AulaApi.GroupInfo>? _cachedGroups;
+    private List<AulaApi.ResourceInfo>? _cachedResources;
     private int _syncIndex;
 
     /// <summary>
@@ -775,7 +880,6 @@ class TrayApp
     private bool SyncSubscriptionsWithOutlook(List<AulaApi.Employee>? employees = null)
     {
         employees ??= _cachedEmployees;
-        if (employees == null || _subscribedEmployees.Count == 0) return false;
 
         var outlookCals = OutlookBridge.GetInternetCalendarNames();
         if (outlookCals.Count == 0)
@@ -784,30 +888,79 @@ class TrayApp
             return false;
         }
 
-        var empById = employees.ToDictionary(e => e.Id);
-        var removed = _subscribedEmployees
-            .Where(id => !_moveTimers.ContainsKey(id) // skip kalendere der stadig oprettes
-                && empById.TryGetValue(id, out var e)
-                && !OutlookHasCalendar(outlookCals, $"{e.Initials} - {e.Name}"))
-            .ToList();
+        var changed = false;
 
-        if (removed.Count == 0) return false;
-
-        foreach (var id in removed)
+        // Sync employees
+        if (employees != null && _subscribedEmployees.Count > 0)
         {
-            _subscribedEmployees.Remove(id);
-            CancelMoveTimer(id);
-            if (empById.TryGetValue(id, out var e))
+            var empById = employees.ToDictionary(e => e.Id);
+            var removed = _subscribedEmployees
+                .Where(id => !_moveTimers.ContainsKey(id)
+                    && empById.TryGetValue(id, out var e)
+                    && !OutlookHasCalendar(outlookCals, EmpCalName(e.Initials, e.Name)))
+                .ToList();
+
+            foreach (var id in removed)
             {
-                var calName = $"{e.Initials} - {e.Name}";
-                var safeName = string.Join("_", calName.Split(Path.GetInvalidFileNameChars()));
-                try { File.Delete(Path.Combine(CalendarDir, $"{safeName}.ics")); } catch { }
-                Log($"Subscription fjernet (ikke i Outlook): {e.Initials}");
+                _subscribedEmployees.Remove(id);
+                CancelMoveTimer(id);
+                if (empById.TryGetValue(id, out var e))
+                {
+                    var calName = EmpCalName(e.Initials, e.Name);
+                    var safeName = string.Join("_", calName.Split(Path.GetInvalidFileNameChars()));
+                    try { File.Delete(Path.Combine(CalendarDir, $"{safeName}.ics")); } catch { }
+                    Log($"Subscription fjernet (ikke i Outlook): {e.Initials}");
+                }
+                changed = true;
             }
         }
-        SaveSubscriptions();
-        RecalcCalendarInterval();
-        return true;
+
+        // Sync groups
+        if (_subscribedGroups.Count > 0)
+        {
+            var removedGroups = _subscribedGroups
+                .Where(kv => !_moveTimers.ContainsKey(kv.Key)
+                    && !OutlookHasCalendar(outlookCals, kv.Value))
+                .Select(kv => kv.Key).ToList();
+
+            foreach (var id in removedGroups)
+            {
+                var name = _subscribedGroups[id];
+                _subscribedGroups.Remove(id);
+                CancelMoveTimer(id);
+                var safeName = string.Join("_", name.Split(Path.GetInvalidFileNameChars()));
+                try { File.Delete(Path.Combine(CalendarDir, $"{safeName}.ics")); } catch { }
+                Log($"Gruppe-subscription fjernet (ikke i Outlook): {name}");
+                changed = true;
+            }
+        }
+
+        // Sync resources
+        if (_subscribedResources.Count > 0)
+        {
+            var removedResources = _subscribedResources
+                .Where(kv => !_moveTimers.ContainsKey(kv.Key)
+                    && !OutlookHasCalendar(outlookCals, kv.Value))
+                .Select(kv => kv.Key).ToList();
+
+            foreach (var id in removedResources)
+            {
+                var name = _subscribedResources[id];
+                _subscribedResources.Remove(id);
+                CancelMoveTimer(id);
+                var safeName = string.Join("_", name.Split(Path.GetInvalidFileNameChars()));
+                try { File.Delete(Path.Combine(CalendarDir, $"{safeName}.ics")); } catch { }
+                Log($"Ressource-subscription fjernet (ikke i Outlook): {name}");
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            SaveSubscriptions();
+            RecalcCalendarInterval();
+        }
+        return changed;
     }
 
     private void CancelMoveTimer(string empId)
@@ -823,17 +976,29 @@ class TrayApp
     /// Matcher kalendernavne — håndterer Outlook's "(N)" suffix ved duplikater.
     /// "AV - Navn" matcher "AV - Navn", "AV - Navn (1)", "AV - Navn (2)" osv.
     /// </summary>
+    /// <summary>Bygger kalendernavn med 🅐 suffix for medarbejdere.</summary>
+    private static string EmpCalName(string initials, string name) => $"{initials} {name}{CalSuffix}";
+
+    /// <summary>Bygger kalendernavn med 🅐 suffix for klasser/lokaler.</summary>
+    private static string CalName(string name) => $"{name}{CalSuffix}";
+
     private static bool OutlookHasCalendar(HashSet<string> outlookCals, string calendarName)
-        => outlookCals.Any(c => c == calendarName
-            || (c.StartsWith(calendarName) && c.Length > calendarName.Length
-                && c[calendarName.Length] == ' ' && c[calendarName.Length + 1] == '('));
+    {
+        var displayName = calendarName.Replace(CalSuffix, CalDisplay);
+        return outlookCals.Any(c => c == calendarName || c == displayName
+            || MatchesWithSuffix(c, calendarName) || MatchesWithSuffix(c, displayName));
+    }
+
+    private static bool MatchesWithSuffix(string outlookName, string expected)
+        => outlookName.StartsWith(expected) && outlookName.Length > expected.Length
+            && outlookName[expected.Length] == ' ' && outlookName[expected.Length + 1] == '(';
 
     private async Task SyncNextCalendarAsync()
     {
-        if (_api == null || _subscribedEmployees.Count == 0) return;
+        if (_api == null || TotalSubscriptions == 0) return;
 
         // Hent medarbejdere én gang, genbrug derefter
-        if (_cachedEmployees == null)
+        if (_cachedEmployees == null && _subscribedEmployees.Count > 0)
         {
             try { _cachedEmployees = await _api.GetEmployeesAsync(); }
             catch { return; }
@@ -841,30 +1006,52 @@ class TrayApp
 
         SyncSubscriptionsWithOutlook();
 
-        var subList = _subscribedEmployees.ToList();
-        if (subList.Count == 0) return;
+        // Byg unified liste: (calendarName, initials, fetchFunc)
+        var syncList = new List<(string calName, string initials, Func<Task<List<AulaApi.CalendarEvent>>> fetch)>();
 
-        var empById = _cachedEmployees!.ToDictionary(e => e.Id);
+        if (_cachedEmployees != null)
+        {
+            var empById = _cachedEmployees.ToDictionary(e => e.Id);
+            foreach (var id in _subscribedEmployees)
+            {
+                if (empById.TryGetValue(id, out var emp))
+                    syncList.Add((EmpCalName(emp.Initials, emp.Name), emp.Initials, () => FetchCalendarInChunks(id)));
+            }
+        }
 
-        // Rullende: synk én ad gangen
-        _syncIndex = _syncIndex % subList.Count;
-        var empId = subList[_syncIndex];
+        foreach (var (id, name) in _subscribedGroups)
+        {
+            var capturedId = id;
+            syncList.Add((name, "", () => FetchGroupCalendarInChunks(capturedId)));
+        }
+
+        foreach (var (id, name) in _subscribedResources)
+        {
+            var capturedId = id;
+            syncList.Add((name, "", () => FetchResourceCalendarInChunks(capturedId)));
+        }
+
+        if (syncList.Count == 0) return;
+
+        _syncIndex = _syncIndex % syncList.Count;
+        var (calName, initials, fetchFunc) = syncList[_syncIndex];
         _syncIndex++;
-
-        if (!empById.TryGetValue(empId, out var emp)) return;
 
         try
         {
-            Log($"Rullende sync: {emp.Initials} ({_syncIndex}/{subList.Count})");
-            await FetchAndSaveIcs(
-                $"{emp.Initials} - {emp.Name}",
-                () => FetchCalendarInChunks(emp.Id),
-                emp.Initials, silent: true);
+            Log($"Rullende sync: {calName} ({_syncIndex}/{syncList.Count})");
+            await FetchAndSaveIcs(calName, fetchFunc, initials, silent: true);
+
+            // Sørg for kalenderen er i institutionsgruppen + har ▲ display-navn
+            var institution = _api?.Institution ?? "AulaSync";
+            OutlookBridge.MoveCalendarToGroup(calName, institution);
+            var displayName = calName.Replace(CalSuffix, CalDisplay);
+            OutlookBridge.RenameCalendar(calName, displayName);
         }
         catch (Exception ex)
         {
-            ShowBalloon($"Sync-fejl: {emp.Initials} - {ex.Message}");
-            Log($"Sync fejl for {emp.Initials}: {ex.Message}");
+            ShowBalloon($"Sync-fejl: {calName} - {ex.Message}");
+            Log($"Sync fejl for {calName}: {ex.Message}");
         }
     }
 
@@ -900,7 +1087,7 @@ class TrayApp
     private void RecalcCalendarInterval()
     {
         var totalCycleMs = LoadConfig().TryGetValue("calendar_interval", out var ci) ? (int)ci : 6 * 3_600_000;
-        var count = Math.Max(_subscribedEmployees.Count, 1);
+        var count = Math.Max(TotalSubscriptions, 1);
         _calendarTimer.Interval = Math.Max(totalCycleMs / count, 1_800_000);
     }
 
