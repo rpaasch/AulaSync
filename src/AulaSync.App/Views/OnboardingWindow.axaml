@@ -32,7 +32,7 @@
         <StackPanel IsVisible="{Binding IsWelcome}" Spacing="16" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="420">
           <TextBlock Classes="h3" Text="Velkommen til AulaSync" HorizontalAlignment="Center" />
           <TextBlock Text="{Binding WelcomeText}" TextWrapping="Wrap" TextAlignment="Center" />
-          <Button Classes="accent" Content="Log ind med Aula" Command="{Binding LogInCommand}" HorizontalAlignment="Center" />
+          <Button Classes="accent" Content="{Binding LogInLabel}" Command="{Binding LogInCommand}" HorizontalAlignment="Center" />
         </StackPanel>
 
         <!-- Trin 2: Login i samme vindue -->

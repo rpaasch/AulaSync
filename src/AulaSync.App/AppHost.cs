@@ -31,7 +31,8 @@ public sealed class AppHost
         Paths = paths;
         Log = new FileLog(paths.Log);
         Config = new ConfigStore(paths.Config);
-        Sync = new SyncService(new SubscriptionStore(paths.Subscriptions), paths.Calendars, Log, Time);
+        Sync = new SyncService(new SubscriptionStore(paths.Subscriptions), paths.Calendars, Log, Time, config: Config.Load);
+        Scheduler = new BackgroundScheduler(Sync, Time, Log, () => Config.Load().UpdateInterval);
         Session = new SessionController(Sync, Log);
         Browser = new BrowserProfile(paths, OperatingSystem.IsMacOS());
         Platform = new DesktopPlatform(Log);
@@ -49,6 +50,7 @@ public sealed class AppHost
     public FileLog Log { get; }
     public ConfigStore Config { get; }
     public SyncService Sync { get; }
+    public BackgroundScheduler Scheduler { get; }
     public SessionController Session { get; }
     public BrowserProfile Browser { get; }
     public IPlatform Platform { get; }
@@ -68,7 +70,8 @@ public sealed class AppHost
         Log.Info($"AulaSync {SettingsViewModel.Version} starter{(_silent ? " (--silent)" : "")}");
         if (OperatingSystem.IsWindows() && OldVersion.IsRunning()) Notifier.Show(OldVersion.Text, () => { });
         ServerRunning = StartServer();
-        _ = new BackgroundScheduler(Sync, Time, Log).RunAsync(_cts.Token);
+        _ = Scheduler.RunAsync(_cts.Token).ContinueWith(t => Log.Error("Baggrundsplanen stoppede", t.Exception!),
+            TaskContinuationOptions.OnlyOnFaulted);
         _channel.Listen(() => Dispatcher.UIThread.Post(Windows.ShowMainOrOnboarding));
 
         // Sync ved login; ikon og menu følger status.

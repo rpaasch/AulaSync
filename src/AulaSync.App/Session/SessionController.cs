@@ -54,7 +54,7 @@ public sealed class SessionController
         // Rollerne på valgte skemaer følger Aula: egen rolle nu, kollegernes når listen over medarbejdere hentes.
         Catalog = new ScheduleCatalog(client, all => _ = _sync.UpdateRolesAsync(all));
         if (OwnSchedule is { } own) await _sync.UpdateRolesAsync([own]);
-        _sync.SetClient(client);
+        _sync.SetClient(client, profile.InstitutionCode);
         _log.Info($"Logget ind (institution {profile.InstitutionCode})");
         Changed?.Invoke();
         return profile;

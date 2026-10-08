@@ -281,6 +281,61 @@ public class SyncServiceTests : IDisposable
         Assert.Equal(1, _sync.Status.Schedules);
     }
 
+    // Ved første opdatering får filen institutionens nummer og initialer eller navn foran nøglen, og filen fra 3.0.0
+    // (bare nøglen) slettes. Adressen er den samme, og en import er stadig uændret.
+    [Fact]
+    public async Task File_gets_readable_name_and_old_name_is_removed()
+    {
+        var dir = _dir.File("kalendere");
+        Directory.CreateDirectory(dir);
+        var old = Path.Combine(dir, "klasse-88231.ics");
+        File.WriteAllText(old, IcsWriter.Write(SevenA, [Ahead("1")], Start));
+        Subscribe(SevenA);
+        Assert.Equal(old, _sync.FilePath(SevenA)); // før opdateringen: den gamle fil
+        Assert.Equal(1, _sync.StateOf(SevenA).Lessons);
+        await _sync.MarkImportedAsync(SevenA);
+
+        _sync.SetClient(_client, "123456");
+        _client.Events = (_, _, _) => [Ahead("1")];
+        await _sync.SyncAllAsync(default);
+        var renamed = Path.Combine(dir, "123456-7A-klasse-88231.ics");
+        Assert.Equal([renamed], Directory.GetFiles(dir));
+        Assert.Equal(renamed, _sync.FilePath(SevenA));
+        Assert.False(_sync.ChangedSinceImport(_sync.Subscriptions.Single()));
+        Assert.Contains("Skrev 123456-7A-klasse-88231.ics (1 begivenheder)", File.ReadAllText(_dir.File("log.txt")));
+
+        await _sync.RemoveAsync(SevenA, default);
+        Assert.Empty(Directory.GetFiles(dir));
+    }
+
+    // Log ud midt i en opdatering: valgene ryddes, men kalenderfilerne bliver liggende (også dem, der ikke er hentet endnu).
+    [Fact]
+    public async Task Log_out_during_sync_keeps_the_files()
+    {
+        Subscribe(Anna, SevenA);
+        _sync.SetClient(_client, "123456");
+        _client.Events = (_, _, _) => [Ahead("1")];
+        await _sync.SyncAllAsync(default);
+        var dir = _dir.File("kalendere");
+        string[] files = [Path.Combine(dir, "123456-7A-klasse-88231.ics"), Path.Combine(dir, "123456-AE-medarbejder-1001.ics")];
+        Assert.Equal(files, Directory.GetFiles(dir).Order());
+
+        var loggedOut = false;
+        _client.Events = (_, _, _) =>
+        {
+            if (!loggedOut)
+            {
+                loggedOut = true;
+                _sync.SetClient(null);
+                _sync.ClearAllAsync().GetAwaiter().GetResult();
+            }
+            return [Ahead("1")];
+        };
+        await _sync.SyncAllAsync(default);
+        Assert.Equal(files, Directory.GetFiles(dir).Order());
+        Assert.Empty(_store.Load());
+    }
+
     [Fact]
     public async Task Remove_deletes_subscription_state_and_file()
     {
@@ -309,6 +364,33 @@ public class SyncServiceTests : IDisposable
         Assert.Equal(Start.AddMinutes(5), imported.ImportedAt);
         Assert.Equal(Start.AddMinutes(5).AddDays(90), imported.ImportUntil);
         Assert.Equal(IcsInspect.ReadFile(IcsPath(SevenA), imported.ImportedAt, imported.ImportUntil)!.ContentHash, imported.ImportHash);
+    }
+
+    // Indstillingerne (interval og statusbegivenhed) læses ved hver opdatering. Statusbegivenheden ændres hver gang, men
+    // er ikke en ændring i skemaet: et importeret skema er stadig uændret.
+    [Fact]
+    public async Task Settings_reach_the_calendar_file_without_changing_imports()
+    {
+        var config = new AppConfig();
+        _time.SetLocalTimeZone(Copenhagen);
+        var sync = new SyncService(_store, _dir.File("kalendere"), new FileLog(_dir.File("log.txt")), _time, NoDelay, () => config);
+        sync.SetClient(_client);
+        _client.Events = (_, _, _) => [Ahead("1")];
+        await sync.AddAsync(SevenA, default);
+        await sync.MarkImportedAsync(SevenA);
+        var ics = File.ReadAllText(sync.FilePath(SevenA));
+        Assert.Contains("REFRESH-INTERVAL;VALUE=DURATION:PT1H\r\n", ics);
+        Assert.DoesNotContain("aulasync-status", ics);
+
+        config = new AppConfig(UpdateMinutes: 30, StatusEvent: true);
+        _time.Advance(TimeSpan.FromHours(1));
+        await sync.SyncAllAsync(default);
+        ics = File.ReadAllText(sync.FilePath(SevenA));
+        Assert.Contains("REFRESH-INTERVAL;VALUE=DURATION:PT30M\r\n", ics);
+        Assert.Contains("UID:aulasync-status-klasse-88231@aulasync\r\n", ics);
+        Assert.Contains("SUMMARY:AulaSync opdateret man. 13. apr. 11:00\r\n", ics); // 9:00 UTC er 11:00 i København
+        Assert.Equal(1, sync.StateOf(SevenA).Lessons);
+        Assert.False(sync.ChangedSinceImport(sync.Subscriptions.Single()));
     }
 
     // Skemaet dækker altid 90 dage tilbage og 90 dage frem fra i dag, så perioden rykker en dag hver dag. Det er ikke en

@@ -129,9 +129,13 @@ public class ImportGuideTests
     {
         var platform = new FakePlatform(isMac: false);
         var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
-        var vm = new ImportGuideViewModel(SevenA, "/data/kalendere/klasse-4711.ics", platform, time);
+        // Filen kan få nyt navn, mens guiden er åben (første opdatering efter 3.0.0); stien slås op, når den bruges.
+        var path = "/data/kalendere/klasse-4711.ics";
+        var vm = new ImportGuideViewModel(SevenA, () => path, platform, time);
         Assert.Equal("Importér 7A", vm.Title);
         Assert.Equal("klasse-4711.ics", vm.FileName);
+        path = "/data/kalendere/101001-7A-klasse-4711.ics";
+        Assert.Equal("101001-7A-klasse-4711.ics", vm.FileName); // filens navn, som man ser det, når man vælger den
         Assert.Equal("Vis fil i Stifinder", vm.RevealLabel);
 
         var copy = vm.CopyNameCommand.ExecuteAsync(null);
@@ -144,7 +148,7 @@ public class ImportGuideTests
         vm.RevealCommand.Execute(null);
         Assert.Equal(["7A"], platform.Copied);
         Assert.Equal(["https://outlook.office.com/calendar"], platform.Opened);
-        Assert.Equal(["/data/kalendere/klasse-4711.ics"], platform.Revealed);
+        Assert.Equal(["/data/kalendere/101001-7A-klasse-4711.ics"], platform.Revealed);
     }
 
     [Fact]
@@ -168,7 +172,7 @@ public class ImportGuideTests
     {
         var platform = new FakePlatform(isMac: false) { CopyWorks = false };
         var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
-        var guide = new ImportGuideViewModel(SevenA, "/x.ics", platform, time);
+        var guide = new ImportGuideViewModel(SevenA, () => "/x.ics", platform, time);
         var fallback = new OutlookFallbackViewModel(SevenA, 9876, platform, time);
 
         var copyName = guide.CopyNameCommand.ExecuteAsync(null);
@@ -184,7 +188,7 @@ public class ImportGuideTests
     [AvaloniaFact]
     public void Guide_window_shows_three_steps_and_hint()
     {
-        var window = new ImportGuideWindow(new ImportGuideViewModel(SevenA, "/x.ics", new FakePlatform(), TimeProvider.System));
+        var window = new ImportGuideWindow(new ImportGuideViewModel(SevenA, () => "/x.ics", new FakePlatform(), TimeProvider.System));
         window.Show();
         var buttons = window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).ToList();
         Assert.Contains("Kopiér navn", buttons);

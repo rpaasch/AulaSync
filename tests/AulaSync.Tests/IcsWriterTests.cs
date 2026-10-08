@@ -21,8 +21,8 @@ public class IcsWriterTests
         Assert.Contains("CALSCALE:GREGORIAN\r\n", ics);
         Assert.Contains("METHOD:PUBLISH\r\n", ics);
         Assert.Contains("X-WR-CALNAME:AE Anna Eksempel\r\n", ics);
-        Assert.Contains("REFRESH-INTERVAL;VALUE=DURATION:PT6H\r\n", ics);
-        Assert.Contains("X-PUBLISHED-TTL:PT6H\r\n", ics);
+        Assert.Contains("REFRESH-INTERVAL;VALUE=DURATION:PT1H\r\n", ics);
+        Assert.Contains("X-PUBLISHED-TTL:PT1H\r\n", ics);
         Assert.DoesNotContain("BEGIN:VEVENT", ics);
     }
 
@@ -124,4 +124,60 @@ public class IcsWriterTests
         Assert.Equal(3, Lines(ics).Count(l => l == "BEGIN:VEVENT"));
         Assert.Equal(3, Lines(ics).Count(l => l == "END:VEVENT"));
     }
+    [Theory]
+    [InlineData(30, "PT30M")]
+    [InlineData(60, "PT1H")]
+    public void Refresh_follows_options(int minutes, string expected)
+    {
+        var ics = IcsWriter.Write(Anna, [], Now, new IcsOptions(TimeSpan.FromMinutes(minutes)));
+        Assert.Contains($"REFRESH-INTERVAL;VALUE=DURATION:{expected}\r\n", ics);
+        Assert.Contains($"X-PUBLISHED-TTL:{expected}\r\n", ics);
+    }
+
+    static string StatusEvent(DateTimeOffset now)
+    {
+        var ics = IcsWriter.Write(Anna, [Ev(id: "5001")], now, new IcsOptions(TimeSpan.FromHours(1), Copenhagen));
+        var start = ics.IndexOf("BEGIN:VEVENT\r\nUID:aulasync-status-", StringComparison.Ordinal);
+        Assert.True(start >= 0, "Ingen statusbegivenhed");
+        return ics[start..(ics.IndexOf("END:VEVENT\r\n", start, StringComparison.Ordinal) + 12)];
+    }
+
+    // Slået til i Indstillinger: en privat begivenhed mandag kl. 5.45-6.00 viser, hvornår skemaet blev hentet.
+    [Fact]
+    public void Status_event_is_private_on_monday_morning()
+    {
+        var status = StatusEvent(new DateTimeOffset(2026, 10, 7, 12, 32, 0, TimeSpan.Zero)); // onsdag 14:32 dansk tid
+        Assert.Equal(string.Join("\r\n",
+            "BEGIN:VEVENT",
+            "UID:aulasync-status-medarbejder-1000001@aulasync",
+            "DTSTAMP:20261007T123200Z",
+            "DTSTART:20261005T034500Z",
+            "DTEND:20261005T040000Z",
+            "SUMMARY:AulaSync opdateret ons. 7. okt. 14:32",
+            @"DESCRIPTION:AulaSync hentede skemaet fra Aula onsdag 7. oktober 2026 kl. 14:32.\nDenne private aftale kan slås fra i AulaSync under Indstillinger.",
+            "CLASS:PRIVATE",
+            "TRANSP:TRANSPARENT",
+            "END:VEVENT") + "\r\n", Unfold(status));
+    }
+
+    // Lørdag og søndag ligger den i den kommende uge; vintertid regnes om til UTC.
+    [Theory]
+    [InlineData("2026-10-05T05:00:00+02:00", "20261005T034500Z", "man. 5. okt. 05:00")]
+    [InlineData("2026-10-09T23:59:00+02:00", "20261005T034500Z", "fre. 9. okt. 23:59")]
+    [InlineData("2026-10-10T08:00:00+02:00", "20261012T034500Z", "lør. 10. okt. 08:00")]
+    [InlineData("2026-10-25T12:00:00+01:00", "20261026T044500Z", "søn. 25. okt. 12:00")]
+    [InlineData("2026-11-03T09:15:00+01:00", "20261102T044500Z", "tirs. 3. nov. 09:15")]
+    [InlineData("2026-11-05T09:15:00+01:00", "20261102T044500Z", "tors. 5. nov. 09:15")]
+    public void Status_event_week_and_time_zone(string now, string start, string stamp)
+    {
+        var status = Unfold(StatusEvent(DateTimeOffset.Parse(now)));
+        Assert.Contains($"DTSTART:{start}\r\n", status);
+        Assert.Contains($"SUMMARY:AulaSync opdateret {stamp}\r\n", status);
+    }
+
+    [Fact]
+    public void No_status_event_by_default() =>
+        Assert.DoesNotContain("aulasync-status", IcsWriter.Write(Anna, [Ev()], Now));
+
+    static string Unfold(string ics) => ics.Replace("\r\n ", "");
 }

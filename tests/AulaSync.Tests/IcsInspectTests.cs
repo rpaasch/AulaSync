@@ -42,6 +42,19 @@ public class IcsInspectTests
         Assert.NotEqual(baseline, IcsInspect.Read(IcsWriter.Write(SevenA, [Lesson("1")], Now)).ContentHash);
     }
 
+    // Statusbegivenheden (Indstillinger) ændres ved hver opdatering og er ikke en lektion: den tæller ikke med.
+    [Fact]
+    public void Status_event_is_not_counted_or_hashed()
+    {
+        var plain = IcsInspect.Read(IcsWriter.Write(SevenA, [Lesson("1")], Now));
+        var options = new IcsOptions(TimeSpan.FromHours(1), Copenhagen);
+        var withStatus = IcsInspect.Read(IcsWriter.Write(SevenA, [Lesson("1")], Now, options));
+        var later = IcsInspect.Read(IcsWriter.Write(SevenA, [Lesson("1")], Now.AddDays(7), options));
+        Assert.Equal(1, withStatus.Events);
+        Assert.Equal(plain.ContentHash, withStatus.ContentHash);
+        Assert.Equal(plain.ContentHash, later.ContentHash);
+    }
+
     [Fact]
     public void Missing_file_is_null()
     {

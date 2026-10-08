@@ -12,9 +12,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version til prøvebygningen (uden udgivelse)
-        required: true
-        default: 3.0.0
+        description: Version til prøvebygningen (uden udgivelse); tom er versionen i AulaSync.App.csproj
+        required: false
 
 permissions:
   contents: write
@@ -33,7 +32,7 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: v
         env:
           INPUT_VERSION: ${{ inputs.version }}
@@ -47,8 +46,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - run: dotnet test AulaSync.slnx -c Release
@@ -60,8 +59,8 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - name: Byg AulaSync.exe (selvstændig, én fil)
@@ -78,11 +77,11 @@ jobs:
           check-jsonschema --schemafile https://aka.ms/winget-manifest.version.1.6.0.schema.json "$d/rpaasch.AulaSync.yaml"
           check-jsonschema --schemafile https://aka.ms/winget-manifest.installer.1.6.0.schema.json "$d/rpaasch.AulaSync.installer.yaml"
           check-jsonschema --schemafile https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json "$d/rpaasch.AulaSync.locale.da-DK.yaml"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: out/win/AulaSync.exe
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: winget
           path: out/winget
@@ -91,8 +90,8 @@ jobs:
     needs: [version, test]
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - name: Byg AulaSync.app og .dmg (Apple Silicon og Intel)
@@ -102,7 +101,7 @@ jobs:
             dotnet publish src/AulaSync.App -c Release -r "$rid" --self-contained true -p:DebugType=none -p:Version="$v" -o "out/$rid"
             bash packaging/mac/make-dmg.sh "$rid" "out/$rid" "$v" out/dmg
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mac
           path: out/dmg/*.dmg
@@ -112,8 +111,8 @@ jobs:
     needs: [version, windows, mac]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
       - name: Lav udgivelsen

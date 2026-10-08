@@ -18,6 +18,8 @@ public sealed record ScheduleRef(ScheduleKind Kind, string Id, string Name, stri
 {
     public string Id { get; } = IsValidId(Id) ? Id : throw new ArgumentException($"Ugyldigt Aula-id: '{Id}'", nameof(Id));
 
+    // Navnet i kalender-adressen (http://localhost:9876/klasse-88231.ics). Filen på disken har også institution og
+    // initialer eller navn i navnet (CalendarFiles).
     public string FileName => $"{Kind.Slug()}-{Id}.ics";
 
     public string CalendarName => Kind == ScheduleKind.Employee && Initials != "" ? $"{Initials} {Name}" : Name;

@@ -1,5 +1,11 @@
 AulaSync 3 er en ny udgave med ét formål: skemaer fra Aula, der holder sig opdateret i din kalender, på Windows og Mac.
 
+**Nyt i 3.1**
+- Vælg selv, hvor tit skemaerne hentes fra Aula: hver halve time, hver time, hver 2., 4. eller 8. time. Standard er nu hver 4. time (før hver 6.). Sjældnere giver færre forespørgsler til Aula. Se *Indstillinger*.
+- *Vis opdateringstid i kalenderen*: en privat aftale mandag kl. 5.45 i hver kalender viser, hvornår skemaet sidst blev hentet. Slået fra som standard.
+- Kalenderfilerne har institutionens nummer og initialer eller navn i navnet, fx `123456-AE-medarbejder-1001.ics`, så de er lette at finde i Stifinder og Finder, også når du importerer i Outlook. Filerne får det nye navn ved næste opdatering; adressen i kalenderprogrammet er den samme, så abonnementer virker som før.
+- *Hjælp* i Indstillinger: *Vejledning* åbner vejledningen, og *Kom i gang igen…* viser trinene fra første start igen.
+
 **Vigtigt, hvis du kommer fra 2.x**
 - Beskeder synkroniseres ikke længere til Outlook.
 - Indstillinger og valgte kalendere fra 2.x overføres ikke. Log ind, og vælg dine skemaer igen.

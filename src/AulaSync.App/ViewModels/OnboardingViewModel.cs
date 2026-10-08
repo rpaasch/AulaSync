@@ -33,15 +33,20 @@ public sealed partial class OnboardingViewModel : ObservableObject, ICalendarCar
     readonly IPlatform _platform;
     readonly IAutostart _autostart;
     readonly Func<ScheduleRef?> _ownSchedule;
+    readonly Func<bool> _signedIn;
+    readonly bool _again; // første start er gennemført før; vist igen fra Indstillinger › Hjælp
     bool _ownPreselected;
 
+    // signedIn: logget ind i Aula nu; så springer velkomsten login over.
     public OnboardingViewModel(ConfigStore config, IPlatform platform, IAutostart autostart,
-        AddScheduleViewModel add, MainViewModel main, Func<ScheduleRef?> ownSchedule)
+        AddScheduleViewModel add, MainViewModel main, Func<ScheduleRef?> ownSchedule, Func<bool> signedIn)
     {
         _config = config;
         _platform = platform;
         _autostart = autostart;
         _ownSchedule = ownSchedule;
+        _signedIn = signedIn;
+        _again = config.Load().FirstRunDone;
         Add = add;
         Main = main;
         var chosen = config.Load().CalendarApp ?? CalendarApps.DefaultFor(platform.IsMac);
@@ -96,7 +101,9 @@ public sealed partial class OnboardingViewModel : ObservableObject, ICalendarCar
             OnPropertyChanged(name);
     }
 
-    [RelayCommand] void LogIn() => Step = OnboardingStep.Login;
+    public string LogInLabel => _signedIn() ? "Fortsæt" : "Log ind med Aula";
+
+    [RelayCommand] void LogIn() => Step = _signedIn() ? OnboardingStep.CalendarApp : OnboardingStep.Login;
 
     // Kaldes, når login i trin 2 er gennemført; appen går selv videre.
     public void SignedIn() => Step = OnboardingStep.CalendarApp;
@@ -136,10 +143,11 @@ public sealed partial class OnboardingViewModel : ObservableObject, ICalendarCar
         OnPropertyChanged(nameof(ShowAppleCalendarHint));
     }
 
-    // Trin 4: dit eget skema er forudvalgt (én gang; fjerner brugeren det senere, kommer det ikke igen).
+    // Trin 4: dit eget skema er forudvalgt (én gang; fjerner brugeren det senere, kommer det ikke igen). Ikke når første
+    // start vises igen: så har brugeren allerede valgt.
     void PreselectOwnSchedule()
     {
-        if (_ownPreselected || _ownSchedule() is not { } own) return;
+        if (_again || _ownPreselected || _ownSchedule() is not { } own) return;
         _ownPreselected = true;
         Add.Select(own);
     }
@@ -147,7 +155,7 @@ public sealed partial class OnboardingViewModel : ObservableObject, ICalendarCar
     void Finish()
     {
         _config.Save(_config.Load() with { FirstRunDone = true });
-        _autostart.SetEnabled(true); // "Start AulaSync, når jeg logger ind" er til som standard
+        if (!_again) _autostart.SetEnabled(true); // "Start AulaSync, når jeg logger ind" er til som standard
         Finished?.Invoke();
     }
 }

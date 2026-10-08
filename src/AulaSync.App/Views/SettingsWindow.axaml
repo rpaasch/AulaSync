@@ -5,49 +5,84 @@
         x:DataType="app:SettingsViewModel"
         Title="Indstillinger" Width="520" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterScreen">
-  <StackPanel Margin="18,18,18,16">
-    <StackPanel.Styles>
-      <Style Selector="DockPanel.r, StackPanel.r">
-        <Setter Property="Margin" Value="0,11" />
-      </Style>
-      <Style Selector="Separator">
-        <Setter Property="Margin" Value="0" />
-        <Setter Property="Background" Value="{DynamicResource LineBrush}" />
-      </Style>
-    </StackPanel.Styles>
+  <!-- Højst skærmens højde (WindowFit.CapToScreen); ellers kan indholdet rulles. -->
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="18,18,18,16">
+      <StackPanel.Styles>
+        <Style Selector="DockPanel.r, StackPanel.r">
+          <Setter Property="Margin" Value="0,11" />
+        </Style>
+        <Style Selector="Separator">
+          <Setter Property="Margin" Value="0" />
+          <Setter Property="Background" Value="{DynamicResource LineBrush}" />
+        </Style>
+      </StackPanel.Styles>
 
-    <StackPanel Classes="r" Spacing="10">
-      <TextBlock Text="Kalenderprogram" />
-      <app:CalendarCardsView />
+      <StackPanel Classes="r" Spacing="10">
+        <TextBlock Text="Kalenderprogram" />
+        <app:CalendarCardsView />
+      </StackPanel>
+      <Separator />
+      <DockPanel Classes="r">
+        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding Intervals}" SelectedItem="{Binding SelectedInterval}"
+                  VerticalAlignment="Center" Margin="12,0,0,0" AutomationProperties.Name="Hent skemaer fra Aula">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="app:IntervalOption">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="Hent skemaer fra Aula" />
+          <TextBlock Classes="sub" Text="Sjældnere giver færre forespørgsler til Aula. Opdatér nu henter altid med det samme." TextWrapping="Wrap" />
+        </StackPanel>
+      </DockPanel>
+      <DockPanel Classes="r">
+        <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding StatusEvent}" OnContent="" OffContent=""
+                      VerticalAlignment="Center" AutomationProperties.Name="Vis opdateringstid i kalenderen" />
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="Vis opdateringstid i kalenderen" TextWrapping="Wrap" />
+          <TextBlock Classes="sub" TextWrapping="Wrap"
+                     Text="En privat aftale mandag kl. 5.45 viser, hvornår skemaet sidst blev hentet. Ændringen kommer med ved næste opdatering." />
+        </StackPanel>
+      </DockPanel>
+      <Separator />
+      <DockPanel Classes="r">
+        <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding StartAtLogin}" OnContent="" OffContent=""
+                      AutomationProperties.Name="Start ved login" />
+        <TextBlock Text="Start AulaSync, når jeg logger ind" VerticalAlignment="Center" TextWrapping="Wrap" />
+      </DockPanel>
+      <Separator />
+      <DockPanel Classes="r">
+        <Panel DockPanel.Dock="Right" VerticalAlignment="Center">
+          <Button Content="Log ud…" Command="{Binding LogOutCommand}" IsVisible="{Binding IsSignedIn}" />
+          <Button Content="Log ind…" Command="{Binding LogInCommand}" IsVisible="{Binding !IsSignedIn}" />
+        </Panel>
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="{Binding AccountText}" TextWrapping="Wrap" />
+          <TextBlock Classes="sub" Text="{Binding InstitutionText}"
+                     IsVisible="{Binding InstitutionText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+      </DockPanel>
+      <Separator />
+      <DockPanel Classes="r">
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Button Classes="ghost" Content="Vejledning" Command="{Binding OpenGuideCommand}" />
+          <Button Classes="ghost" Content="Kom i gang igen…" Command="{Binding ShowOnboardingCommand}" />
+        </StackPanel>
+        <TextBlock Text="Hjælp" VerticalAlignment="Center" />
+      </DockPanel>
+      <Separator />
+      <DockPanel Classes="r">
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Button Classes="ghost" Content="Åbn kalendermappe" Command="{Binding OpenCalendarFolderCommand}" />
+          <Button Classes="ghost" Content="Åbn log" Command="{Binding OpenLogCommand}" />
+        </StackPanel>
+        <StackPanel>
+          <TextBlock Text="Fejlfinding" />
+          <TextBlock Classes="sub" Text="{Binding VersionText}" />
+        </StackPanel>
+      </DockPanel>
     </StackPanel>
-    <Separator />
-    <DockPanel Classes="r">
-      <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding StartAtLogin}" OnContent="" OffContent=""
-                    AutomationProperties.Name="Start ved login" />
-      <TextBlock Text="Start AulaSync, når jeg logger ind" VerticalAlignment="Center" TextWrapping="Wrap" />
-    </DockPanel>
-    <Separator />
-    <DockPanel Classes="r">
-      <Panel DockPanel.Dock="Right" VerticalAlignment="Center">
-        <Button Content="Log ud…" Command="{Binding LogOutCommand}" IsVisible="{Binding IsSignedIn}" />
-        <Button Content="Log ind…" Command="{Binding LogInCommand}" IsVisible="{Binding !IsSignedIn}" />
-      </Panel>
-      <StackPanel VerticalAlignment="Center">
-        <TextBlock Text="{Binding AccountText}" TextWrapping="Wrap" />
-        <TextBlock Classes="sub" Text="{Binding InstitutionText}"
-                   IsVisible="{Binding InstitutionText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-      </StackPanel>
-    </DockPanel>
-    <Separator />
-    <DockPanel Classes="r">
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-        <Button Classes="ghost" Content="Åbn kalendermappe" Command="{Binding OpenCalendarFolderCommand}" />
-        <Button Classes="ghost" Content="Åbn log" Command="{Binding OpenLogCommand}" />
-      </StackPanel>
-      <StackPanel>
-        <TextBlock Text="Fejlfinding" />
-        <TextBlock Classes="sub" Text="{Binding VersionText}" />
-      </StackPanel>
-    </DockPanel>
-  </StackPanel>
+  </ScrollViewer>
 </Window>
