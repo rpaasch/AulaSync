@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- AulaSync.app. @VERSION@ udfyldes af make-dmg.sh. Id'et er det samme som LaunchAgent'ens (dk.rpaasch.aulasync). -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>dk.rpaasch.aulasync</string>
+  <key>CFBundleName</key>
+  <string>AulaSync</string>
+  <key>CFBundleDisplayName</key>
+  <string>AulaSync</string>
+  <key>CFBundleExecutable</key>
+  <string>AulaSync</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>@VERSION@</string>
+  <key>CFBundleVersion</key>
+  <string>@VERSION@</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>da</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.productivity</string>
+  <!-- .NET 10 kræver mindst macOS 15 -->
+  <key>LSMinimumSystemVersion</key>
+  <string>15.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>

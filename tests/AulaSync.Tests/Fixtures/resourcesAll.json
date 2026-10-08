@@ -1,0 +1,9 @@
+{"status":{"code":0,"message":"OK"},"data":[
+ {"id":412,"name":"53","displayName":"53","inactiveReason":null,"resourceCategory":{"id":1,"name":"Lokaler","resourceType":"location"}},
+ {"id":413,"name":"Gymnastiksal","displayName":"Gymnastiksal","inactiveReason":null,"resourceCategory":{"id":1,"name":"Lokaler","resourceType":"location"}},
+ {"id":414,"name":"Gammelt lokale","displayName":"Gammelt lokale","inactiveReason":"Nedlagt","resourceCategory":{"id":1,"name":"Lokaler","resourceType":"location"}},
+ {"id":415,"name":"Projektor 2","displayName":"Projektor 2","inactiveReason":null,"resourceCategory":{"id":2,"name":"Udstyr","resourceType":"other"}},
+ {"id":416,"name":"Hal 2","displayName":"Hal 2","inactiveReason":null,"resourceCategory":{"id":3,"name":"Ekstra lokaler","resourceType":"extra-location"}},
+ {"id":417,"name":"Musiklokale","displayName":"Musiklokale","inactiveReason":null,"resourceCategory":{"id":4,"name":"Faglokaler","resourceType":"Location"}},
+ {"id":418,"name":"iPad-vogn","displayName":"iPad-vogn","inactiveReason":null,"resourceCategory":{"id":5,"name":"Elektronik","resourceType":"electronics"}}
+]}

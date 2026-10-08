@@ -1,0 +1,53 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:AulaSync.App"
+        x:Class="AulaSync.App.SettingsWindow"
+        x:DataType="app:SettingsViewModel"
+        Title="Indstillinger" Width="520" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterScreen">
+  <StackPanel Margin="18,18,18,16">
+    <StackPanel.Styles>
+      <Style Selector="DockPanel.r, StackPanel.r">
+        <Setter Property="Margin" Value="0,11" />
+      </Style>
+      <Style Selector="Separator">
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="Background" Value="{DynamicResource LineBrush}" />
+      </Style>
+    </StackPanel.Styles>
+
+    <StackPanel Classes="r" Spacing="10">
+      <TextBlock Text="Kalenderprogram" />
+      <app:CalendarCardsView />
+    </StackPanel>
+    <Separator />
+    <DockPanel Classes="r">
+      <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding StartAtLogin}" OnContent="" OffContent=""
+                    AutomationProperties.Name="Start ved login" />
+      <TextBlock Text="Start AulaSync, når jeg logger ind" VerticalAlignment="Center" TextWrapping="Wrap" />
+    </DockPanel>
+    <Separator />
+    <DockPanel Classes="r">
+      <Panel DockPanel.Dock="Right" VerticalAlignment="Center">
+        <Button Content="Log ud…" Command="{Binding LogOutCommand}" IsVisible="{Binding IsSignedIn}" />
+        <Button Content="Log ind…" Command="{Binding LogInCommand}" IsVisible="{Binding !IsSignedIn}" />
+      </Panel>
+      <StackPanel VerticalAlignment="Center">
+        <TextBlock Text="{Binding AccountText}" TextWrapping="Wrap" />
+        <TextBlock Classes="sub" Text="{Binding InstitutionText}"
+                   IsVisible="{Binding InstitutionText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+    </DockPanel>
+    <Separator />
+    <DockPanel Classes="r">
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+        <Button Classes="ghost" Content="Åbn kalendermappe" Command="{Binding OpenCalendarFolderCommand}" />
+        <Button Classes="ghost" Content="Åbn log" Command="{Binding OpenLogCommand}" />
+      </StackPanel>
+      <StackPanel>
+        <TextBlock Text="Fejlfinding" />
+        <TextBlock Classes="sub" Text="{Binding VersionText}" />
+      </StackPanel>
+    </DockPanel>
+  </StackPanel>
+</Window>

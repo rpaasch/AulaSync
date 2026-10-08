@@ -1,0 +1,17 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:AulaSync.App"
+        x:Class="AulaSync.App.AddScheduleWindow"
+        x:DataType="app:AddScheduleViewModel"
+        Title="Tilføj skema" Width="560" Height="560" MinHeight="360"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <DockPanel>
+    <Border Classes="footer" DockPanel.Dock="Bottom" Background="{DynamicResource SurfaceBrush}">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Classes="accent" Content="Færdig" IsDefault="True" Click="Done" />
+        <TextBlock Classes="muted" Text="{Binding CountText}" VerticalAlignment="Center" />
+      </DockPanel>
+    </Border>
+    <app:AddScheduleView Margin="18,18,18,0" />
+  </DockPanel>
+</Window>

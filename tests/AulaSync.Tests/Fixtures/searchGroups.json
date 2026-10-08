@@ -1,0 +1,5 @@
+{"status":{"code":0,"message":"OK"},"data":{"results":[
+ {"id":"88231","name":"7A","groupType":"Hovedgruppe"},
+ {"id":"88232","name":"7 årgang","groupType":"Andet"},
+ {"id":"1001","name":"Anna Eksempel","portalRole":"employee"}
+]}}

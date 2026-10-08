@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="using:AulaSync.App"
+             x:Class="AulaSync.App.AddScheduleView"
+             x:DataType="app:AddScheduleViewModel">
+  <DockPanel>
+    <TextBox x:Name="Search" DockPanel.Dock="Top" Text="{Binding Query}"
+             PlaceholderText="Søg efter navn, initialer, klasse eller lokale"
+             AutomationProperties.Name="Søg" />
+    <Border DockPanel.Dock="Top" Classes="seg" HorizontalAlignment="Left" Margin="0,10">
+      <StackPanel Orientation="Horizontal" AutomationProperties.Name="Filter">
+        <ToggleButton Classes="seg" Content="Alle" IsChecked="{Binding IsAll}" />
+        <ToggleButton Classes="seg" Content="Medarbejdere" IsChecked="{Binding IsEmployees}" />
+        <ToggleButton Classes="seg" Content="Klasser" IsChecked="{Binding IsGroups}" />
+        <ToggleButton Classes="seg" Content="Lokaler" IsChecked="{Binding IsResources}" />
+      </StackPanel>
+    </Border>
+
+    <StackPanel DockPanel.Dock="Top" IsVisible="{Binding IsLoading}" Orientation="Horizontal" Spacing="8" Margin="0,8">
+      <ProgressBar IsIndeterminate="True" Width="80" VerticalAlignment="Center" />
+      <TextBlock Classes="muted" Text="Henter medarbejdere, klasser og lokaler…" />
+    </StackPanel>
+    <DockPanel DockPanel.Dock="Top" IsVisible="{Binding HasError}" Margin="0,8">
+      <Button DockPanel.Dock="Right" Content="Prøv igen" Command="{Binding LoadCommand}" />
+      <TextBlock Classes="sub error" Text="{Binding Error}" TextWrapping="Wrap" VerticalAlignment="Center" />
+    </DockPanel>
+    <TextBlock DockPanel.Dock="Top" Classes="muted" Text="{Binding EmptyText}" IsVisible="{Binding HasEmptyText}" />
+
+    <!-- Virtualiseret, så skoler med mange medarbejdere ikke gør listen langsom -->
+    <ItemsControl ItemsSource="{Binding Rows}">
+      <ItemsControl.Template>
+        <ControlTemplate>
+          <ScrollViewer>
+            <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+          </ScrollViewer>
+        </ControlTemplate>
+      </ItemsControl.Template>
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <VirtualizingStackPanel />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.DataTemplates>
+        <DataTemplate x:DataType="app:HeaderRow">
+          <TextBlock Classes="section" Text="{Binding Title}" />
+        </DataTemplate>
+        <DataTemplate x:DataType="app:CatalogEntryViewModel">
+          <Border Classes="item grouped" Classes.first="{Binding IsFirst}" Classes.last="{Binding IsLast}">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Content="Tilføj" Command="{Binding AddCommand}"
+                      IsVisible="{Binding !IsAdded}" AutomationProperties.Name="{Binding AddLabel}" />
+              <TextBlock DockPanel.Dock="Right" Classes="done" Text="✓ Tilføjet" IsVisible="{Binding IsAdded}" />
+              <Border Classes="badge" Classes.staff="{Binding IsEmployee}" Classes.class="{Binding IsGroup}"
+                      Classes.room="{Binding IsResource}" Margin="0,0,12,0">
+                <TextBlock Text="{Binding BadgeText}" />
+              </Border>
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Classes="name" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="sub" Text="{Binding Sub}" />
+              </StackPanel>
+            </DockPanel>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.DataTemplates>
+    </ItemsControl>
+  </DockPanel>
+</UserControl>

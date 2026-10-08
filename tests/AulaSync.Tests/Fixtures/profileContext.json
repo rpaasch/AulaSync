@@ -1,0 +1,1 @@
+{"status":{"code":0,"message":"OK"},"data":{"institutionProfile":{"id":9000001,"role":"employee","firstName":"Test","lastName":"Bruger","shortName":"TB","institution":{"institutionCode":"101001","institutionName":"Testskolen"}},"institutions":[{"institutionCode":"101001","institutionProfileId":9000001,"institutionRole":"leader"}]}}

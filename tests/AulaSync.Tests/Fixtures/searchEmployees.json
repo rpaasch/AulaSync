@@ -1,0 +1,6 @@
+{"status":{"code":0,"message":"OK"},"data":{"results":[
+ {"id":"1001","portalRole":"employee","name":"Anna Eksempel","shortName":"AE","institutionRole":"teacher"},
+ {"id":"1002","portalRole":"guardian","name":"Forælder Et","shortName":"","institutionRole":"guardian"},
+ {"id":"2001","portalRole":"employee","name":"Kim Prøve","shortName":"KP","institutionRole":"preschool-teacher"},
+ {"id":"5","portalRole":"employee","name":"Gruppe uden rolle","groupType":"Hovedgruppe"}
+]}}

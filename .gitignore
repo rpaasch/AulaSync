@@ -1,15 +1,23 @@
+# Byggeoutput
 bin/
 obj/
 publish/
-publish-single/
-publish-release/
-publish-standalone/
+artifacts/
 *.zip
 *.exe
 *.pdb
+
+# Editor og lokale filer
 .vs/
+*.user
 .claude/
 CLAUDE.md
-*.user
-Resources/icon.ico
-tools/
+
+# Private planlægningsdokumenter (spec, plan, mockup, research, spikes). Git følger dem i dev-repoet, så reglen
+# holder dem ikke ude af en fletning. Til det offentlige repo: flet med `git merge --squash`, og kør
+# `git rm -r --cached docs/superpowers` før commit. En almindelig fletning tager også de commits med, der tilføjede filerne.
+docs/superpowers/
+
+# Midlertidigt
+.probe/
+spikes/LoginSpike/captured/
