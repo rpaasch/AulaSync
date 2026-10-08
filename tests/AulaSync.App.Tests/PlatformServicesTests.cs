@@ -185,6 +185,87 @@ public class OldVersionTests
     }
 }
 
+// Windows: genvejen AulaSync i Start-menuen skrives, når den mangler, er ødelagt eller peger på en anden exe (fx den gamle
+// AulaSync 2), og røres ikke, når den peger rigtigt. Selve genvejen kan kun testes på Windows (prøvebygningen kører testen dér).
+public class StartMenuShortcutTests
+{
+    [Fact]
+    public void Same_file_regardless_of_case()
+    {
+        Assert.True(StartMenuShortcut.PointsTo(@"C:\Users\Anna\Documents\AulaSync.exe", @"c:\users\anna\documents\AULASYNC.EXE"));
+        Assert.False(StartMenuShortcut.PointsTo(@"C:\Users\Anna\AulaSync\AulaSync.exe", @"C:\Users\Anna\Documents\AulaSync.exe"));
+        Assert.False(StartMenuShortcut.PointsTo(null, @"C:\Users\Anna\Documents\AulaSync.exe"));
+        Assert.False(StartMenuShortcut.PointsTo("", @"C:\Users\Anna\Documents\AulaSync.exe"));
+    }
+
+    [Fact]
+    public void A_missing_file_is_its_own_real_path()
+    {
+        using var dir = new TempDir();
+        var exe = Path.Combine(dir.Path, "AulaSync.exe");
+        Assert.Equal(exe, StartMenuShortcut.RealPath(exe));
+        File.WriteAllText(exe, "");
+        Assert.Equal(exe, StartMenuShortcut.RealPath(exe));
+    }
+
+    // winget starter AulaSync gennem en henvisning (Links\AulaSync.exe); genvejen skal pege på selve filen.
+    [Fact]
+    public void A_link_points_to_the_real_file()
+    {
+        using var dir = new TempDir();
+        var real = Path.Combine(dir.Path, "AulaSync.exe");
+        File.WriteAllText(real, "");
+        var alias = Path.Combine(dir.Path, "Henvisning.exe");
+        try { File.CreateSymbolicLink(alias, real); }
+        catch (Exception ex) when (OperatingSystem.IsWindows() && ex is IOException or UnauthorizedAccessException)
+        {
+            Assert.Skip("Henvisninger kræver udviklertilstand eller administrator på Windows");
+            return;
+        }
+        // Windows kan give TEMP-stien i lang form, så kun filnavnet sammenlignes.
+        var resolved = StartMenuShortcut.RealPath(alias);
+        Assert.Equal("AulaSync.exe", Path.GetFileName(resolved));
+        Assert.True(File.Exists(resolved));
+
+        File.Delete(real);
+        Assert.Equal(alias, StartMenuShortcut.RealPath(alias));
+    }
+
+    [Fact]
+    public void Windows_writes_the_shortcut_when_missing_or_wrong_and_leaves_it_when_right()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Genveje findes kun på Windows");
+            return;
+        }
+        Assert.EndsWith(@"\Start Menu\Programs\AulaSync.lnk", StartMenuShortcut.DefaultPath);
+        using var dir = new TempDir();
+        var link = Path.Combine(dir.Path, "Start Menu", "Programs", StartMenuShortcut.FileName);
+        var old = Path.Combine(dir.Path, "Gammel", "AulaSync.exe");
+        var exe = Path.Combine(dir.Path, "Ny", "AulaSync.exe");
+        foreach (var file in new[] { old, exe })
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllText(file, "");
+        }
+
+        Assert.True(StartMenuShortcut.Ensure(link, old));
+        Assert.Equal(old, StartMenuShortcut.ReadTarget(link), ignoreCase: true);
+        var written = File.GetLastWriteTimeUtc(link);
+
+        Assert.False(StartMenuShortcut.Ensure(link, old.ToUpperInvariant()));
+        Assert.Equal(written, File.GetLastWriteTimeUtc(link));
+
+        Assert.True(StartMenuShortcut.Ensure(link, exe));
+        Assert.Equal(exe, StartMenuShortcut.ReadTarget(link), ignoreCase: true);
+
+        File.WriteAllText(link, "ikke en genvej");
+        Assert.True(StartMenuShortcut.Ensure(link, exe));
+        Assert.Equal(exe, StartMenuShortcut.ReadTarget(link), ignoreCase: true);
+    }
+}
+
 // Mac: AulaSync starter uden Dock-ikon (fx ved login med --silent) og får det først, når et vindue vises (AppWindows.Present
 // kalder UpdateDock). Uden det stod appen i Dock hele dagen, selv om den kun skal findes i menulinjen (spec §3.2).
 public class MacOptionsTests

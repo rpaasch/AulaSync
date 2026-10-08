@@ -69,6 +69,7 @@ public sealed class AppHost
     {
         Log.Info($"AulaSync {SettingsViewModel.Version} starter{(_silent ? " (--silent)" : "")}");
         if (OperatingSystem.IsWindows() && OldVersion.IsRunning()) Notifier.Show(OldVersion.Text, () => { });
+        _ = Task.Run(UpdateStartMenuShortcut);
         ServerRunning = StartServer();
         _ = Scheduler.RunAsync(_cts.Token).ContinueWith(t => Log.Error("Baggrundsplanen stoppede", t.Exception!),
             TaskContinuationOptions.OnlyOnFaulted);
@@ -110,6 +111,19 @@ public sealed class AppHost
         }
         if (!_silent) Windows.ShowMain();
         if (!await Relogin.TryAsync(_silent ? Relogin.StartText : null) && !_silent) Windows.ShowLogin();
+    }
+
+    // Windows: genvejen AulaSync i Start-menuen peger på den exe, der kører (StartMenuShortcut). Lykkes det ikke, kører
+    // AulaSync videre; genvejen er kun en hjælp til at finde den.
+    void UpdateStartMenuShortcut()
+    {
+        if (!OperatingSystem.IsWindows() || Environment.ProcessPath is not { } exe) return;
+        try
+        {
+            if (StartMenuShortcut.Ensure(StartMenuShortcut.DefaultPath, StartMenuShortcut.RealPath(exe)))
+                Log.Info("Genvejen AulaSync i Start-menuen er lavet eller rettet");
+        }
+        catch (Exception ex) { Log.Error("Kunne ikke lave genvejen AulaSync i Start-menuen", ex); }
     }
 
     // Brugerens egen port (UserPort): første gang 9876 eller den første ledige.

@@ -19,9 +19,11 @@ AulaSync henter skemaer fra Aula og holder dem opdateret som kalendere i dit kal
 
 Mangler **Kør alligevel**, eller siger Windows, at programmet er blokeret, har skolens IT lukket for programmer, de ikke har godkendt. Så spørg IT.
 
-AulaSync starter fra samme sted, når du logger ind. Flytter eller sletter du filen, bliver kalenderne ikke længere opdateret. Har du flyttet den, så start den fra den nye mappe, og slå **Start AulaSync, når jeg logger ind** fra og til igen i Indstillinger. Kommer der en ny udgave, så afslut AulaSync, og erstat filen i samme mappe.
+AulaSync starter fra den mappe, filen ligger i, når du logger ind. Flytter eller sletter du filen, bliver kalenderne ikke længere opdateret. Har du flyttet den, så afslut AulaSync først: højreklik på AulaSync-ikonet i systembakken ved uret, og vælg **Afslut AulaSync**. Start den så fra den nye mappe, og slå **Start AulaSync, når jeg logger ind** fra og til igen i Indstillinger. Kommer der en ny udgave, så afslut AulaSync, og erstat filen i samme mappe.
 
-**Med winget:** Højreklik på Start-knappen, vælg **Terminal** (på Windows 10: **Windows PowerShell**), og skriv `winget install rpaasch.AulaSync`. Spørger winget, om du accepterer vilkårene, så svar ja. winget laver ingen genvej i Start-menuen, så første gang starter du AulaSync ved at skrive `AulaSync` i et nyt vindue (Terminal eller PowerShell). En ny udgave kommer først i winget, når Microsoft har godkendt den. Installerer winget version 2.x, så hent `AulaSync.exe` som beskrevet ovenfor i stedet. Når der kommer en ny udgave, så højreklik på AulaSync-ikonet i systembakken ved uret, og vælg **Afslut AulaSync**. Skriv så `winget upgrade rpaasch.AulaSync` i et nyt vindue (Terminal eller PowerShell), og start AulaSync igen ved at skrive `AulaSync`.
+Når AulaSync har kørt første gang, ligger den i Start-menuen, så du kan finde den ved at skrive *AulaSync* i Start. Flytter du filen, retter AulaSync selv genvejen, når du starter AulaSync fra den nye mappe.
+
+**Med winget:** Højreklik på Start-knappen, vælg **Terminal** (på Windows 10: **Windows PowerShell**), og skriv `winget install rpaasch.AulaSync`. Spørger winget, om du accepterer vilkårene, så svar ja. winget laver ingen genvej i Start-menuen, så første gang starter du AulaSync ved at skrive `AulaSync` i et nyt vindue (Terminal eller PowerShell). Derefter ligger AulaSync i Start-menuen. En ny udgave kommer først i winget, når Microsoft har godkendt den. Når der kommer en ny udgave, så højreklik på AulaSync-ikonet i systembakken ved uret, og vælg **Afslut AulaSync**. Skriv så `winget upgrade rpaasch.AulaSync` i et nyt vindue (Terminal eller PowerShell), og start AulaSync igen ved at skrive `AulaSync`.
 
 Login bruger Microsoft Edge WebView2 Runtime, som følger med Windows 11 og findes på de fleste computere med Windows 10. Mangler den, står der i login-vinduet, hvor du henter den.
 
@@ -160,7 +162,7 @@ AulaSync 3 er skrevet forfra og gør én ting: skemaer som kalendere.
 - Indstillinger og valgte kalendere fra 2.x overføres ikke. Log ind, og vælg dine skemaer igen.
 - Slet de gamle kalendere fra 2.x i Outlook; de bliver ikke opdateret længere. De ligger i en kalendergruppe med skolens navn og hedder fx "7A" eller "Lokale 53". Klasse- og lokalekalendere hedder det samme i AulaSync 3, så se efter, at du sletter dem i skolens gruppe.
 - Kører den gamle AulaSync stadig, viser AulaSync 3 en besked. Højreklik på det gamle ikon i systembakken, og vælg **Afslut**. Åbner der i stedet vinduet "AulaSync - Log ind", så luk det; det afslutter også den gamle AulaSync. Når du har gennemført første start, starter kun AulaSync 3, når du logger ind.
-- Den gamle AulaSync lavede genvejen **AulaSync** i Start-menuen. Ligger AulaSync 3 i en anden mappe, starter genvejen stadig den gamle. Slet derfor genvejen *AulaSync* i mappen `%APPDATA%\Microsoft\Windows\Start Menu\Programs` (skriv adressen i Stifinder).
+- Den gamle AulaSync lavede genvejen **AulaSync** i Start-menuen. AulaSync 3.1.1 og nyere retter den, når den starter, så genvejen starter den nye AulaSync. Har du en ældre AulaSync 3, så hent den nyeste.
 - Den gamle mappe `%USERPROFILE%\.aulasync` bruges ikke længere. Slet den, når den gamle AulaSync er afsluttet. Den rummer stadig data fra 2.x: dit gamle Aula-login, loggen og de gamle skemafiler.
 
 ## Fejlfinding
@@ -200,6 +202,7 @@ Bliver en kalender i Apple Kalender aldrig opdateret, så se, om den står under
 - **Start ved login** sættes først op, når brugeren klikker **Færdig** i første start eller slår **Start AulaSync, når jeg logger ind** til i Indstillinger. AulaSync skriver så værdien `AulaSync` med indholdet `"<sti til AulaSync.exe>" --silent` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Skal AulaSync starte ved login før første start, kan I selv skrive den samme værdi.
 - Start ikke også AulaSync på anden vis, fx fra `HKLM` eller mappen Start. Så starter AulaSync to gange, og ved den anden start viser AulaSync et vindue: første start, hvis brugeren ikke har gennemført den, og ellers hovedvinduet.
 - Startværdien peger på den sti, `AulaSync.exe` lå på, da brugeren klikkede **Færdig**. Læg filen et fast sted.
+- AulaSync lægger genvejen `AulaSync.lnk` i brugerens egen Start-menu, `%APPDATA%\Microsoft\Windows\Start Menu\Programs`. Ved hver start laver AulaSync den igen, hvis den mangler, og retter den, hvis den peger på en anden fil. Det kan ikke slås fra. I behøver ikke selv lave en genvej.
 - Alt, også login, gemmes i `%LOCALAPPDATA%\AulaSync`, som ikke følger med en roaming-profil. På en ny computer skal brugeren igennem første start igen.
 - Hver bruger får sin egen port ved første start: 9876 eller den første ledige op til 9899. Porten reserveres ikke. Var to brugere ikke logget ind samtidig, da de startede AulaSync første gang, kan de få samme port, og så kan kun den ene starte kalender-serveren, når begge er logget ind.
 - Kalender-serveren svarer kun på computeren selv, men den har ingen adgangskode. Andre brugere på samme computer, fx på en terminalserver, kan derfor hente en brugers skemaer, hvis de kender porten og skemaets adresse.

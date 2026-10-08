@@ -63,6 +63,9 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
+      # Genvejen i Start-menuen bruger Windows' egen ShellLink og kan kun testes her (springes over på Linux).
+      - name: Tjek genvejen i Start-menuen
+        run: dotnet test tests/AulaSync.App.Tests -c Release --filter "FullyQualifiedName~StartMenuShortcutTests"
       - name: Byg AulaSync.exe (selvstændig, én fil)
         run: >
           dotnet publish src/AulaSync.App -c Release -r win-x64 --self-contained true
