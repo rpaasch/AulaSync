@@ -59,11 +59,13 @@ Description: |-
   Fra version 3 synkroniseres beskeder ikke længere, og indstillinger fra 2.x overføres ikke.
 Tags:
   - aula
-  - skole
-  - skema
-  - kalender
   - outlook
+  - skole
+  - sync
+  - education
+  - kalender
   - ics
+  - skema
 ReleaseNotesUrl: https://github.com/$repo/releases/tag/v$version
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0

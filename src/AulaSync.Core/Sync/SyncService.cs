@@ -25,21 +25,26 @@ public sealed class SyncService
     readonly FileLog _log;
     readonly TimeProvider _time;
     readonly Func<TimeSpan, CancellationToken, Task>? _delay;
+    readonly Func<AppConfig> _config;
     readonly SemaphoreSlim _syncGate = new(1, 1);   // én hentning ad gangen
     readonly SemaphoreSlim _storeGate = new(1, 1);  // læs-ændr-skriv af abonnementer.json
     readonly object _lock = new();
     readonly Dictionary<string, ScheduleState> _states = new();
     readonly HashSet<string> _reportedImports; // importerede skemaer, der er meldt som ændret (eller var det ved start)
     IAulaClient? _client;
+    string _institution = ""; // institutionens nummer i filnavnene (CalendarFiles)
+    DateTimeOffset? _lastSyncStarted;
 
+    // config: interval og statusbegivenhed (Indstillinger) til kalenderfilerne; læses ved hver opdatering.
     public SyncService(SubscriptionStore store, string calendarDir, FileLog log, TimeProvider time,
-        Func<TimeSpan, CancellationToken, Task>? delay = null)
+        Func<TimeSpan, CancellationToken, Task>? delay = null, Func<AppConfig>? config = null)
     {
         _store = store;
         _calendarDir = calendarDir;
         _log = log;
         _time = time;
         _delay = delay;
+        _config = config ?? (() => new AppConfig());
         Status = SyncStatus.Initial(store.Load().Count);
         _reportedImports = ChangedImports().Select(s => s.Key).ToHashSet();
     }
@@ -49,10 +54,17 @@ public sealed class SyncService
     public event Action? SessionExpired;
     // Efter en opdatering: importerede skemaer, der lige er blevet ændret siden importen (hvert skema én gang pr. import).
     public event Action<IReadOnlyList<ScheduleRef>>? ImportsChanged;
+    // En opdatering af alle skemaer er startet med forbindelse til Aula (baggrundsplanen regner næste opdatering derfra).
+    public event Action? SyncStarted;
+
+    public DateTimeOffset? LastSyncStarted { get { lock (_lock) return _lastSyncStarted; } }
 
     public IReadOnlyList<Subscription> Subscriptions => _store.Load();
 
-    public string FilePath(ScheduleRef schedule) => Path.Combine(_calendarDir, schedule.FileName);
+    // Skemaets fil: den, der ligger på disken (navnet kan være fra en tidligere udgave), ellers det navn, den får.
+    public string FilePath(ScheduleRef schedule) => CalendarFiles.Find(_calendarDir, schedule.Key).FirstOrDefault() ?? NewPath(schedule);
+
+    string NewPath(ScheduleRef schedule) => Path.Combine(_calendarDir, CalendarFiles.Name(Volatile.Read(ref _institution), schedule));
 
     // Kendt tilstand fra denne kørsel; ellers læses filen på disken (fx lige efter opstart).
     public ScheduleState StateOf(ScheduleRef schedule)
@@ -79,8 +91,11 @@ public sealed class SyncService
     // Importerede skemaer, hvis indhold er ændret siden importen.
     public IReadOnlyList<ScheduleRef> ChangedImports() => _store.Load().Where(ChangedSinceImport).Select(s => s.Schedule).ToList();
 
-    public void SetClient(IAulaClient? client)
+    // institution: den indloggede brugers institution (Profile.InstitutionCode); den står forrest i filnavnene. Ved log
+    // ud beholdes den, så en opdatering, der stadig kører, ikke giver filerne et andet navn.
+    public void SetClient(IAulaClient? client, string institution = "")
     {
+        if (client is not null) Volatile.Write(ref _institution, institution);
         Volatile.Write(ref _client, client);
         Update(s => s with { Connection = client is null ? ConnectionState.LoggedOut : ConnectionState.Online, LastError = null });
     }
@@ -94,12 +109,15 @@ public sealed class SyncService
         {
             var client = Volatile.Read(ref _client);
             if (client is null) return;
+            lock (_lock) _lastSyncStarted = _time.GetUtcNow();
+            SyncStarted?.Invoke();
             var subscriptions = _store.Load();
             string? error = null;
             var offline = false;
             var anyOk = false; // "Opdateret" følger de skemaer, der lykkedes; kun hvis alle fejler, står tidspunktet
             for (int i = 0; i < subscriptions.Count; i++)
             {
+                if (Volatile.Read(ref _client) != client) return; // logget ud undervejs: valgene er ryddet, filerne bliver
                 var progress = new SyncProgress(i + 1, subscriptions.Count);
                 Update(s => s with { Progress = progress });
                 var (outcome, message) = await SyncOneAsync(client, subscriptions[i].Schedule, ct);
@@ -250,11 +268,19 @@ public sealed class SyncService
         {
             var today = DateOnly.FromDateTime(_time.GetLocalNow().DateTime);
             var events = await new ScheduleFetcher(client, _delay).FetchAsync(schedule, today, ct);
-            AtomicFile.WriteAllText(FilePath(schedule), IcsWriter.Write(schedule, events, now));
-            // Blev skemaet fjernet, mens det blev hentet, så fjern også filen igen.
-            if (!_store.Load().Any(s => s.Key == schedule.Key)) { DeleteFile(schedule); return (Outcome.Ok, null); }
+            var config = _config();
+            var options = new IcsOptions(UpdateIntervals.Refresh(config.UpdateInterval), config.StatusEvent ? _time.LocalTimeZone : null);
+            var path = NewPath(schedule);
+            AtomicFile.WriteAllText(path, IcsWriter.Write(schedule, events, now, options));
+            // Blev skemaet fjernet, mens det blev hentet, så fjern også filen igen. Ved log ud bliver filerne liggende.
+            if (!_store.Load().Any(s => s.Key == schedule.Key))
+            {
+                if (Volatile.Read(ref _client) == client) DeleteFile(schedule);
+                return (Outcome.Ok, null);
+            }
+            DeleteFile(schedule, except: path); // filen under et tidligere navn
             SetState(schedule, new ScheduleState(events.Count, now, null, null));
-            _log.Info($"Skrev {schedule.FileName} ({events.Count} begivenheder)");
+            _log.Info($"Skrev {Path.GetFileName(path)} ({events.Count} begivenheder)");
             return (Outcome.Ok, null);
         }
         catch (SessionExpiredException) { return (Outcome.SessionExpired, null); }
@@ -277,11 +303,16 @@ public sealed class SyncService
     static bool IsOffline(Exception ex, CancellationToken ct) =>
         ex is HttpRequestException { StatusCode: null } || (ex is TaskCanceledException && !ct.IsCancellationRequested);
 
-    void DeleteFile(ScheduleRef schedule)
+    // Alle skemaets filer, undtagen except (CalendarFiles.SameName: den nye fil må ikke slettes, fordi filsystemet
+    // giver navnet tilbage med en anden stavemåde).
+    void DeleteFile(ScheduleRef schedule, string? except = null)
     {
-        var file = FilePath(schedule);
-        try { File.Delete(file); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _log.Error($"Kunne ikke slette {file}", ex); }
+        foreach (var file in CalendarFiles.Find(_calendarDir, schedule.Key))
+        {
+            if (CalendarFiles.SameName(file, except)) continue;
+            try { File.Delete(file); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _log.Error($"Kunne ikke slette {file}", ex); }
+        }
     }
 
     void ReportChangedImports()

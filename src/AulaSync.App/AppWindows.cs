@@ -49,15 +49,21 @@ public sealed class AppWindows(AppHost host) : IDialogs
         Present(_main);
     }
 
+    // Vises første start igen fra Indstillinger, lukkes Indstillinger, så dialoger i trin 5 hører til første start, og
+    // kortene ikke viser et gammelt valg bagefter.
     public void ShowOnboarding()
     {
+        _settings?.Close();
         if (_onboarding is null)
         {
             var login = new LoginViewModel(host.Session);
+            bool SignedIn() => host.Session.Profile is not null && host.Sync.Status.LoggedIn;
             var vm = new OnboardingViewModel(host.Config, host.Platform, host.Autostart, NewAddScheduleViewModel(), MainViewModel,
-                () => host.Session.OwnSchedule);
+                () => host.Session.OwnSchedule, SignedIn);
             login.SignedIn += _ => vm.SignedIn();
-            if (host.Session.Profile is not null && host.Sync.Status.LoggedIn) vm.SignedIn();
+            // Første start, der blev afbrudt efter login, fortsætter ved kalenderprogrammet. Vist igen fra Indstillinger
+            // begynder den ved velkomsten.
+            if (SignedIn() && !host.Config.Load().FirstRunDone) vm.SignedIn();
             _onboarding = new OnboardingWindow(vm, new LoginView(host.Browser, login));
             WindowChrome.Apply(_onboarding);
             WindowFit.ToScreen(_onboarding);
@@ -65,6 +71,7 @@ public sealed class AppWindows(AppHost host) : IDialogs
             {
                 _onboarding = null;
                 if (host.Config.Load().FirstRunDone) MainViewModel.Reload();
+                host.UpdateTray(); // prikken følger kalenderprogrammet, der kan være valgt om
                 Post(UpdateDock);
             };
         }
@@ -92,9 +99,11 @@ public sealed class AppWindows(AppHost host) : IDialogs
         if (_settings is null)
         {
             var vm = new SettingsViewModel(host.Config, host.Autostart, host.Session, this, host.Platform, host.Paths,
-                host.SignOutAsync, () => { MainViewModel.Reload(); host.UpdateTray(); }); // prikken følger kalenderprogrammet
+                host.SignOutAsync, () => { MainViewModel.Reload(); host.UpdateTray(); }, // prikken følger kalenderprogrammet
+                host.Scheduler.Reschedule);
             _settings = new SettingsWindow(vm);
             WindowChrome.Apply(_settings);
+            WindowFit.CapToScreen(_settings);
             _settings.Closed += (_, _) => { _settings = null; Post(UpdateDock); };
         }
         Present(_settings);
@@ -103,18 +112,20 @@ public sealed class AppWindows(AppHost host) : IDialogs
     public Task ShowAddScheduleAsync() => ShowModalAsync<object?>(new AddScheduleWindow(NewAddScheduleViewModel()));
 
     public Task<bool> ShowImportGuideAsync(ScheduleRef schedule) =>
-        ShowModalAsync<bool>(new ImportGuideWindow(new ImportGuideViewModel(schedule, host.Sync.FilePath(schedule), host.Platform, host.Time)));
+        ShowModalAsync<bool>(new ImportGuideWindow(new ImportGuideViewModel(schedule, () => host.Sync.FilePath(schedule), host.Platform, host.Time)));
 
     public Task ShowOutlookFallbackAsync(ScheduleRef schedule) =>
         ShowModalAsync<object?>(new OutlookFallbackWindow(new OutlookFallbackViewModel(schedule, host.Config.Load().ServerPort, host.Platform, host.Time)));
 
     public Task<bool> ConfirmLogoutAsync() => ShowModalAsync<bool>(new ConfirmLogoutWindow());
 
-    // Log ud: luk alt; første start vises igen.
+    // Log ud: luk alt; første start vises igen, fra begyndelsen (også hvis den var vist igen fra Indstillinger).
     public void CloseAll()
     {
         _settings?.Close();
         _login?.Close();
+        _onboarding?.Close();
+        _onboarding = null;
         _main?.Hide();
         _mainVm?.Reload();
         UpdateDock();

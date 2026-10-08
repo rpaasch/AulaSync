@@ -27,6 +27,18 @@ public class IcsServerTests : IDisposable
         Assert.NotNull(d.LastModified);
     }
 
+    // Filen kan hedde noget foran nøglen (CalendarFiles); adressen er stadig nøglen.
+    [Fact]
+    public void Serves_readable_file_name_at_the_key_address()
+    {
+        var readable = _dir.File("123456-7A-klasse-88231.ics");
+        File.WriteAllText(readable, "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n");
+        var d = IcsServer.Resolve(_dir.Path, "/klasse-88231.ics", "GET", null);
+        Assert.Equal(200, d.StatusCode);
+        Assert.Equal(readable, d.FilePath);
+        Assert.Equal(404, IcsServer.Resolve(_dir.Path, "/123456-7A-klasse-88231.ics", "GET", null).StatusCode);
+    }
+
     [Theory]
     [InlineData("/lokale-999.ics")]
     [InlineData("/abonnementer.json")]
@@ -236,6 +248,8 @@ public class IcsServerTests : IDisposable
         Assert.True(server.TryStart());
         using var http = new HttpClient();
 
+        File.WriteAllText(_dir.File("123456-7A-klasse-88231.ics"), "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n");
+        await http.GetAsync($"http://localhost:{port}/klasse-88231.ics"); // adressens navn, ikke filens
         var first = await http.GetAsync($"http://localhost:{port}/lokale-412.ics");
         var again = new HttpRequestMessage(HttpMethod.Get, $"http://localhost:{port}/lokale-412.ics");
         again.Headers.IfModifiedSince = first.Content.Headers.LastModified;
@@ -245,7 +259,7 @@ public class IcsServerTests : IDisposable
         foreign.Headers.Host = $"rebind.example:{port}";
         await http.SendAsync(foreign);
 
-        lock (fetched) Assert.Equal(["lokale-412.ics", "lokale-412.ics"], fetched);
+        lock (fetched) Assert.Equal(["klasse-88231.ics", "lokale-412.ics", "lokale-412.ics"], fetched);
     }
 
     [Fact]
@@ -255,6 +269,8 @@ public class IcsServerTests : IDisposable
         using var server = new IcsServer(_dir.Path, new FileLog(_dir.File("log.txt")), port);
         Assert.True(server.TryStart());
         using var http = new HttpClient();
+        File.WriteAllText(_dir.File("123456-7A-klasse-88231.ics"), "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n");
+        await http.GetAsync($"http://localhost:{port}/klasse-88231.ics"); // adressens navn, ikke filens
         var first = await http.GetAsync($"http://localhost:{port}/lokale-412.ics");
         var again = new HttpRequestMessage(HttpMethod.Get, $"http://localhost:{port}/lokale-412.ics");
         again.Headers.IfModifiedSince = first.Content.Headers.LastModified;

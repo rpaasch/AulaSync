@@ -60,7 +60,7 @@ sealed class TestHost : IDisposable
 
 sealed class FakeDialogs : IDialogs
 {
-    public int Logins, Settings, AddSchedules;
+    public int Logins, Settings, AddSchedules, Onboardings;
     public List<ScheduleRef> ImportGuides { get; } = [];
     public List<ScheduleRef> Fallbacks { get; } = [];
     public bool ImportGuideResult { get; set; } = true;
@@ -68,6 +68,7 @@ sealed class FakeDialogs : IDialogs
 
     public void ShowLogin() => Logins++;
     public void ShowSettings() => Settings++;
+    public void ShowOnboarding() => Onboardings++;
     public Task ShowAddScheduleAsync() { AddSchedules++; return Task.CompletedTask; }
     public Task<bool> ShowImportGuideAsync(ScheduleRef schedule) { ImportGuides.Add(schedule); return Task.FromResult(ImportGuideResult); }
     public Task ShowOutlookFallbackAsync(ScheduleRef schedule) { Fallbacks.Add(schedule); return Task.CompletedTask; }

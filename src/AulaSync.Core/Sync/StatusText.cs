@@ -10,7 +10,7 @@ public sealed record RowText(string Text, bool IsError);
 
 public static class StatusText
 {
-    static readonly string[] Months = ["jan.", "feb.", "mar.", "apr.", "maj", "jun.", "jul.", "aug.", "sep.", "okt.", "nov.", "dec."];
+    static readonly string[] Months = EventFormatter.Months;
 
     public static string Menu(SyncStatus s, bool serverRunning, TimeZoneInfo tz)
     {

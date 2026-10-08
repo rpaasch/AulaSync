@@ -48,6 +48,8 @@ AulaSync guider dig gennem fem trin:
 
 Når du klikker **Færdig**, lukker vinduet, og AulaSync kører videre som et lille ikon: på Mac i menulinjen øverst til højre, på Windows i systembakken ved uret nederst til højre. Windows gemmer ofte nye ikoner under pilen **^**. Træk AulaSync-ikonet derfra ned på proceslinjen, så du altid kan se det. AulaSync starter nu selv, når du logger ind på computeren. På Mac viser macOS måske en besked om, at et program kan køre i baggrunden. Det er AulaSync. Slå det ikke fra, ellers starter AulaSync ikke selv.
 
+Vil du igennem trinene igen, så vælg **Kom i gang igen…** under **Hjælp** i [Indstillinger](#indstillinger). Er du logget ind, går **Fortsæt** direkte til valget af kalenderprogram. De skemaer, du har valgt, er stadig valgt, og **Start AulaSync, når jeg logger ind** bliver, som du har sat det.
+
 ## Kalenderprogrammer
 
 | Kalenderprogram | Knappen | Opdateres |
@@ -78,7 +80,7 @@ Klik **Importér…** ved skemaet. AulaSync viser tre trin, hver med sin egen kn
 
 1. **Opret en tom kalender** i Outlook med skemaets navn, fx med **Tilføj kalender › Opret tom kalender**. **Kopiér navn** kopierer navnet, så du kan sætte det ind.
 2. **Åbn Outlook-kalenderen**, vælg **Tilføj kalender › Upload fra fil**, og vælg den nye kalender. **Åbn Outlook på nettet** åbner kalenderen i din browser.
-3. **Vælg filen.** **Vis fil i Finder** (Mac) eller **Vis fil i Stifinder** (Windows) viser, hvor den ligger. Afslut importen i Outlook, og klik **Færdig** i AulaSync.
+3. **Vælg filen.** **Vis fil i Finder** (Mac) eller **Vis fil i Stifinder** (Windows) viser, hvor den ligger. Filen hedder fx `123456-7A-klasse-4711.ics`: institutionens nummer, skemaets navn (for en medarbejder initialerne, ellers navnet), typen og skemaets id i Aula. Afslut importen i Outlook, og klik **Færdig** i AulaSync.
 
 En import er et øjebliksbillede. Når skemaet ændrer sig i Aula, siger AulaSync til: der kommer en besked ("7A er ændret siden import"), ikonet i menulinjen eller systembakken får en prik, og rækken viser **Ændret siden import**. Slet så kalenderen i Outlook, og importér igen med **Importér igen…**. En import dækker de næste ca. 90 dage. Når de er gået, siger AulaSync også til, så du kan importere igen.
 
@@ -102,7 +104,7 @@ Hver række er ét skema med type og antal lektioner. Til højre står knappen e
 
 **⋯** ved hver række: **Tilføj igen** (eller **Importér igen…**), **Kopiér adresse**, **Vis fil i Finder** (Mac) eller **Vis fil i Stifinder** (Windows) og **Fjern skema…**. Brug kun **Tilføj igen**, når kalenderen ikke står i kalenderprogrammet. Ellers abonnerer programmet en gang til, og lektionerne står to gange. Fjerner du et skema, sletter AulaSync kalenderfilen, og kalenderen bliver ikke længere opdateret. Slet også kalenderen i dit kalenderprogram, ellers kan programmet melde en fejl, hver gang det prøver at opdatere den.
 
-Med **+ Tilføj skema** vælger du flere skemaer. Et nyt skema kommer ikke af sig selv i dit kalenderprogram: klik knappen ved skemaet, fx **Tilføj til Kalender**, ligesom ved første start. **Opdatér nu** henter alle skemaer fra Aula med det samme; ellers sker det hver 6. time. Linjen nederst viser, hvornår der sidst blev opdateret, og hvornår næste gang er.
+Med **+ Tilføj skema** vælger du flere skemaer. Et nyt skema kommer ikke af sig selv i dit kalenderprogram: klik knappen ved skemaet, fx **Tilføj til Kalender**, ligesom ved første start. **Opdatér nu** henter alle skemaer fra Aula med det samme; ellers sker det hver 4. time, eller så tit, du har valgt i [Indstillinger](#indstillinger). Linjen nederst viser, hvornår der sidst blev opdateret, og hvornår næste gang er.
 
 Hvert skema dækker 90 dage tilbage og 90 dage frem. Sådan står en lektion i kalenderen:
 
@@ -127,9 +129,12 @@ At lukke hovedvinduet afslutter ikke AulaSync. Vælg **Afslut AulaSync** i menue
 Åbn Indstillinger fra ikonets menu (**Indstillinger…**). På Mac kan du også trykke ⌘,.
 
 - **Kalenderprogram:** de samme fire valg som ved første start. Skifter du program, ændres kun knapperne i hovedvinduet. Skemaerne kommer ikke selv over i det nye program: klik knappen ved hvert skema, eller vælg **Tilføj igen** i ⋯-menuen, hvis rækken allerede viser **✓ Tilføjet**. Kalenderne i det gamle program bliver liggende, til du sletter dem dér.
+- **Hent skemaer fra Aula:** hvor tit AulaSync henter skemaerne: hver halve time, hver time, hver 2. time, hver 4. time (standard) eller hver 8. time. Hver opdatering henter alle dine valgte skemaer fra Aula, så jo sjældnere, jo færre forespørgsler til Aula, men ændringer i Aula kommer også senere i kalenderen. **Opdatér nu** henter altid med det samme. Næste opdatering regnes fra den seneste, også når den kom fra **Opdatér nu** eller fra et login. Vælger du et kortere interval, end der er gået siden sidste opdatering, henter AulaSync med det samme. Uanset intervallet spørger AulaSync Aula hvert 10. minut, om du stadig er logget ind; det holder forbindelsen i live.
+- **Vis opdateringstid i kalenderen:** Slået fra som standard. Slår du den til, får hver af AulaSyncs kalendere en privat aftale mandag kl. 5.45-6.00, fx "AulaSync opdateret ons. 7. okt. 14:32". Så kan du i kalenderen se, hvornår skemaet sidst blev hentet fra Aula. Lørdag og søndag står aftalen i den kommende uge. Den optager ikke tid i kalenderen. Ændringen kommer med ved næste opdatering, også når du slår den fra (eller klik **Opdatér nu**). Kalenderprogrammet viser den, næste gang det henter fra AulaSync; i Apple Kalender kan du trykke ⌘R. Et importeret skema får aftalen først, når du importerer det igen, og den viser så, hvornår filen blev hentet før importen. Aftalen tæller ikke med, når AulaSync ser efter, om skemaet er ændret siden importen.
 - **Start AulaSync, når jeg logger ind:** slået til efter første start.
 - **Logget ind som …:** dit navn og din institution. **Log ud…** glemmer dit login og sletter dine valgte skemaer, og AulaSync begynder forfra med [første start](#første-start). Kalenderfilerne bliver liggende, så kalenderne viser stadig de seneste skemaer, men de bliver ikke opdateret. Vælger du de samme skemaer igen, bliver de opdateret igen, uden at du skal tilføje dem i kalenderprogrammet på ny; klik bare **Færdig** i trin 5. Ved skemaerne står **Tilføj til Kalender** eller **Tilføj til Outlook**, indtil kalenderprogrammet henter skemaet næste gang. Klik ikke på knappen, ellers står lektionerne to gange; rækken skifter selv til **✓ Tilføjet**. Har du importeret skemaer i Outlook, siger AulaSync ikke længere til, når de ændrer sig. Slet kalenderen i Outlook, og importér skemaet igen med **Importér…**. Vil du fjerne skemaerne helt, så slet filerne i kalendermappen (**Åbn kalendermappe**) og kalenderne i dit kalenderprogram.
-- **Fejlfinding:** **Åbn kalendermappe** og **Åbn log**, og versionsnummeret.
+- **Hjælp:** **Vejledning** åbner denne vejledning. **Kom i gang igen…** viser trinene fra [første start](#første-start) igen.
+- **Fejlfinding:** **Åbn kalendermappe** og **Åbn log**, og versionsnummeret. Kalendermappen har én fil pr. skema, fx `123456-AE-medarbejder-1001.ics` (se [Ny Outlook, Outlook til Mac og Outlook på nettet](#ny-outlook-outlook-til-mac-og-outlook-på-nettet)). Filer fra AulaSync 3.0.0 hed fx `medarbejder-1001.ics`; de får det nye navn ved næste opdatering. Adressen i kalenderprogrammet er den samme som før.
 
 ## Når Aula logger dig ud
 
@@ -180,7 +185,7 @@ Login-vinduet bruger WebView2, og den mangler på computeren. Installér den fra
 
 ### Kalenderen viser ikke de nyeste ændringer
 
-AulaSync henter fra Aula hver 6. time; klik **Opdatér nu** for at hente med det samme. Kalenderprogrammet henter derefter fra AulaSync efter sin egen plan. I Apple Kalender kan du trykke ⌘R for at hente med det samme, eller højreklikke på kalenderen, vælge **Vis info** og ændre **Opdater automatisk**.
+AulaSync henter fra Aula hver 4. time, eller så tit, du har valgt i Indstillinger; klik **Opdatér nu** for at hente med det samme. Slå **Vis opdateringstid i kalenderen** til i Indstillinger, hvis du vil kunne se i kalenderen, hvornår skemaet sidst blev hentet. Kalenderprogrammet henter derefter fra AulaSync efter sin egen plan. I Apple Kalender kan du trykke ⌘R for at hente med det samme, eller højreklikke på kalenderen, vælge **Vis info** og ændre **Opdater automatisk**.
 
 Bliver en kalender i Apple Kalender aldrig opdateret, så se, om den står under **iCloud** i Kalenders liste over kalendere. Så henter Apples servere den, og de kan ikke nå AulaSync på din Mac. Slet kalenderen i Kalender, vælg **Tilføj igen** i ⋯-menuen i AulaSync, og vælg **Placering: På min Mac**.
 
@@ -197,6 +202,6 @@ Bliver en kalender i Apple Kalender aldrig opdateret, så se, om den står under
 - Startværdien peger på den sti, `AulaSync.exe` lå på, da brugeren klikkede **Færdig**. Læg filen et fast sted.
 - Alt, også login, gemmes i `%LOCALAPPDATA%\AulaSync`, som ikke følger med en roaming-profil. På en ny computer skal brugeren igennem første start igen.
 - Hver bruger får sin egen port ved første start: 9876 eller den første ledige op til 9899. Porten reserveres ikke. Var to brugere ikke logget ind samtidig, da de startede AulaSync første gang, kan de få samme port, og så kan kun den ene starte kalender-serveren, når begge er logget ind.
-- Kalender-serveren svarer kun på computeren selv, men den har ingen adgangskode. Andre brugere på samme computer, fx på en terminalserver, kan derfor hente en brugers skemaer, hvis de kender porten og filnavnet.
+- Kalender-serveren svarer kun på computeren selv, men den har ingen adgangskode. Andre brugere på samme computer, fx på en terminalserver, kan derfor hente en brugers skemaer, hvis de kender porten og skemaets adresse.
 - Login kræver Microsoft Edge WebView2 Runtime (se [Installation](#windows)).
 - Klassisk Outlook skal have lov til at abonnere på internetkalendere. Det må ikke være slået fra med en gruppepolitik.

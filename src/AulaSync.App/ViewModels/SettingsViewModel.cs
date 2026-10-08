@@ -5,9 +5,17 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AulaSync.App;
 
-// Indstillinger (spec §3.2): kalenderprogram, start ved login, konto med Log ud…, fejlfinding og version.
+// Et valg under "Hent skemaer fra Aula". ToString er det, en skærmlæser læser op for det valgte.
+public sealed record IntervalOption(int Minutes, string Label)
+{
+    public override string ToString() => Label;
+}
+
+// Indstillinger (spec §3.2): kalenderprogram, opdatering, start ved login, konto med Log ud…, hjælp, fejlfinding og version.
 public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
 {
+    public const string GuideUrl = "https://github.com/rpaasch/AulaSync/blob/master/docs/vejledning.md";
+
     readonly ConfigStore _config;
     readonly IAutostart _autostart;
     readonly SessionController _session;
@@ -16,9 +24,11 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
     readonly AppPaths _paths;
     readonly Func<Task> _signOut;
     readonly Action _calendarAppChanged;
+    readonly Action _intervalChanged;
 
+    // intervalChanged: baggrundsplanen regner næste opdatering om (BackgroundScheduler.Reschedule).
     public SettingsViewModel(ConfigStore config, IAutostart autostart, SessionController session, IDialogs dialogs, IPlatform platform,
-        AppPaths paths, Func<Task> signOut, Action calendarAppChanged)
+        AppPaths paths, Func<Task> signOut, Action calendarAppChanged, Action intervalChanged)
     {
         _config = config;
         _autostart = autostart;
@@ -28,14 +38,23 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
         _paths = paths;
         _signOut = signOut;
         _calendarAppChanged = calendarAppChanged;
-        var chosen = config.Load().CalendarApp;
+        _intervalChanged = intervalChanged;
+        var saved = config.Load();
+        var chosen = saved.CalendarApp;
         Cards = CalendarApps.All.Select(a => new CalendarCardViewModel(a, SelectCard) { IsSelected = a == chosen }).ToList();
+        Intervals = UpdateIntervals.Minutes.Select(m => new IntervalOption(m, UpdateIntervals.Label(m))).ToList();
+        SelectedInterval = Intervals.Single(i => TimeSpan.FromMinutes(i.Minutes) == saved.UpdateInterval);
+        StatusEvent = saved.StatusEvent;
         StartAtLogin = autostart.IsEnabled;
         session.Changed += () => OnPropertyChanged(string.Empty);
     }
 
     public IReadOnlyList<CalendarCardViewModel> Cards { get; }
 
+    public IReadOnlyList<IntervalOption> Intervals { get; }
+
+    [ObservableProperty] public partial IntervalOption SelectedInterval { get; set; }
+    [ObservableProperty] public partial bool StatusEvent { get; set; }
     [ObservableProperty] public partial bool StartAtLogin { get; set; }
 
     public bool IsSignedIn => _session.Profile is not null;
@@ -56,6 +75,19 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
         _calendarAppChanged(); // at skifte ændrer hovedknapperne, intet andet
     }
 
+    partial void OnSelectedIntervalChanged(IntervalOption value)
+    {
+        if (value is null || _config.Load().UpdateInterval == TimeSpan.FromMinutes(value.Minutes)) return; // også ved start
+        _config.Save(_config.Load() with { UpdateMinutes = value.Minutes });
+        _intervalChanged();
+    }
+
+    // Kommer med i kalenderfilerne ved næste opdatering.
+    partial void OnStatusEventChanged(bool value)
+    {
+        if (_config.Load().StatusEvent != value) _config.Save(_config.Load() with { StatusEvent = value });
+    }
+
     partial void OnStartAtLoginChanged(bool value)
     {
         if (_autostart.IsEnabled != value) _autostart.SetEnabled(value);
@@ -68,6 +100,10 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
     }
 
     [RelayCommand] void LogIn() => _dialogs.ShowLogin();
+
+    [RelayCommand] void OpenGuide() => _platform.Open(GuideUrl);
+
+    [RelayCommand] void ShowOnboarding() => _dialogs.ShowOnboarding();
 
     [RelayCommand]
     void OpenCalendarFolder()

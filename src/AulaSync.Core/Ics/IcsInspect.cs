@@ -8,8 +8,9 @@ public sealed record IcsSummary(int Events, string ContentHash);
 
 public static class IcsInspect
 {
-    // Antal begivenheder og en hash af indholdet. DTSTAMP ændres ved hver skrivning og tæller derfor ikke med.
-    // from/until: kun begivenheder, der starter i tidsrummet (begge grænser med), tæller.
+    // Antal begivenheder og en hash af indholdet. DTSTAMP ændres ved hver skrivning og tæller derfor ikke med, og det gør
+    // statusbegivenheden heller ikke (IcsWriter.StatusUidPrefix). from/until: kun begivenheder, der starter i tidsrummet
+    // (begge grænser med), tæller.
     public static IcsSummary Read(string ics, DateTimeOffset? from = null, DateTimeOffset? until = null)
     {
         var unfolded = ics.Replace("\r\n ", "").Replace("\r\n\t", "");
@@ -22,7 +23,8 @@ public static class IcsInspect
             if (line == "BEGIN:VEVENT") { current = []; uid = ""; start = null; continue; }
             if (line == "END:VEVENT" && current is not null)
             {
-                events.Add((uid, string.Join("\n", current), start));
+                if (!uid.StartsWith(IcsWriter.StatusUidPrefix, StringComparison.Ordinal))
+                    events.Add((uid, string.Join("\n", current), start));
                 current = null;
                 continue;
             }

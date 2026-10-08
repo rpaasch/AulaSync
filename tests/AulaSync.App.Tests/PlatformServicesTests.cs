@@ -147,6 +147,16 @@ public class WindowFitTests
         Assert.Equal(window.Height, window.MinHeight);
     }
 
+    // Indstillinger tilpasser højden til indholdet; på en lav skærm bliver den højst skærmens højde og kan rulles.
+    [AvaloniaFact]
+    public void Cap_limits_a_window_that_sizes_to_its_content()
+    {
+        var window = new Window { SizeToContent = SizeToContent.Height };
+        WindowFit.Cap(window, new PixelRect(0, 0, 1920, 1032), 1.5);
+        Assert.Equal(1032 / 1.5 - 48, window.MaxHeight, 3);
+        Assert.Equal(SizeToContent.Height, window.SizeToContent);
+    }
+
     // Klik på ikonet, "Åbn AulaSync…", en notifikation eller en ny start skal vise et minimeret vindue igen. Show og
     // Activate alene gør intet ved et minimeret vindue på Windows.
     [AvaloniaFact]

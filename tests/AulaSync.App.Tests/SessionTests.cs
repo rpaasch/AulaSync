@@ -45,6 +45,18 @@ public class SessionControllerTests : IDisposable
         Assert.Equal(1, changed);
     }
 
+    // Institutionens nummer står forrest i kalenderfilernes navne (CalendarFiles).
+    [Fact]
+    public async Task Sign_in_puts_the_institution_in_file_names()
+    {
+        var own = new ScheduleRef(ScheduleKind.Employee, "9000001", "Test Bruger", "TB");
+        _host.Store.Save([new Subscription(own)]);
+        await Create(Aula).SignInAsync(Cookies, default);
+        await _host.Sync.SyncAllAsync(default);
+        Assert.Equal(Path.Combine(_host.Paths.Calendars, "101001-TB-medarbejder-9000001.ics"), _host.Sync.FilePath(own));
+        Assert.True(File.Exists(_host.Sync.FilePath(own)));
+    }
+
     // Er eget skema valgt uden rolle (fx før rollen blev vist), får det rollen ved login.
     [Fact]
     public async Task Sign_in_fills_in_the_role_of_the_own_schedule()

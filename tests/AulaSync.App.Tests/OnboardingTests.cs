@@ -18,14 +18,39 @@ public class OnboardingTests : IDisposable
 
     public void Dispose() => _host.Dispose();
 
-    OnboardingViewModel Create(bool isMac = true)
+    OnboardingViewModel Create(bool isMac = true, bool signedIn = false)
     {
         _platform = new FakePlatform(isMac);
         var catalog = new ScheduleCatalog(new FakeDirectory());
         var add = new AddScheduleViewModel(() => catalog, () => Anna, _host.Sync, _host.Log, a => a());
         var main = new MainViewModel(_host.Sync, _host.Config, _platform, new FakeDialogs(), new FakeActions(),
             _host.Time, Copenhagen, () => true, () => true, a => a());
-        return new OnboardingViewModel(_host.Config, _platform, _autostart, add, main, () => Anna);
+        return new OnboardingViewModel(_host.Config, _platform, _autostart, add, main, () => Anna, () => signedIn);
+    }
+
+    // Indstillinger › Hjælp › Kom i gang igen: forfra fra velkomsten. Er man logget ind, springes login over. Eget skema
+    // vælges ikke igen, og "Start AulaSync, når jeg logger ind" bliver, som brugeren har sat det.
+    [Fact]
+    public async Task Again_from_settings_keeps_own_choices()
+    {
+        var sevenA = new ScheduleRef(ScheduleKind.Group, "88231", "7A");
+        _host.Store.Save([new Subscription(sevenA)]);
+        _host.Config.Save(new AppConfig(CalendarApp.OutlookImport, FirstRunDone: true));
+        var vm = Create(signedIn: true);
+        Assert.True(vm.IsWelcome);
+        Assert.Equal("Fortsæt", vm.LogInLabel);
+
+        vm.LogInCommand.Execute(null);
+        Assert.True(vm.IsCalendarApp);
+        Assert.True(vm.Cards.Single(c => c.App == CalendarApp.OutlookImport).IsSelected);
+        await vm.ContinueCommand.ExecuteAsync(null);
+        Assert.True(vm.IsSchedules);
+        Assert.Equal(1, vm.Add.SelectedCount); // 7A, ikke eget skema
+        await vm.ContinueCommand.ExecuteAsync(null);
+        await vm.ContinueCommand.ExecuteAsync(null);
+        Assert.Equal([sevenA.Key], _host.Store.Load().Select(s => s.Key));
+        Assert.False(_autostart.IsEnabled);
+        Assert.True(_host.Config.Load().FirstRunDone);
     }
 
     [Fact]
@@ -37,6 +62,7 @@ public class OnboardingTests : IDisposable
         Assert.True(vm.IsWelcome);
         Assert.False(vm.ShowFooter);
         Assert.Equal([true, false, false, false, false], vm.Progress);
+        Assert.Equal("Log ind med Aula", vm.LogInLabel);
 
         vm.LogInCommand.Execute(null);
         Assert.True(vm.IsLogin);

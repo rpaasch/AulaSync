@@ -15,7 +15,7 @@ public class SettingsViewModelTests : IDisposable
     readonly FakeAutostart _autostart = new(enabled: true);
     readonly FakePlatform _platform = new();
     readonly SessionController _session;
-    int _signOuts, _appChanges;
+    int _signOuts, _appChanges, _intervalChanges;
 
     public SettingsViewModelTests()
     {
@@ -26,7 +26,7 @@ public class SettingsViewModelTests : IDisposable
     public void Dispose() => _host.Dispose();
 
     SettingsViewModel Create() => new(_host.Config, _autostart, _session, _dialogs, _platform, _host.Paths,
-        () => { _signOuts++; return Task.CompletedTask; }, () => _appChanges++);
+        () => { _signOuts++; return Task.CompletedTask; }, () => _appChanges++, () => _intervalChanges++);
 
     Task SignInAsync() => _session.SignInAsync([new Cookie("PHPSESSID", "a", "/", ".aula.dk"), new Cookie("Csrfp-Token", "b", "/", "www.aula.dk")], default);
 
@@ -92,7 +92,45 @@ public class SettingsViewModelTests : IDisposable
         vm.OpenCalendarFolderCommand.Execute(null);
         vm.OpenLogCommand.Execute(null);
         Assert.Equal([_host.Paths.Calendars, _host.Paths.Log], _platform.Opened);
-        Assert.Equal("Version 3.0.0", vm.VersionText);
+        Assert.Equal("Version 3.1.0", vm.VersionText);
+    }
+
+    // Hvor tit skemaerne hentes fra Aula: standard hver 4. time. Et nyt valg gemmes, og planen regnes om med det samme.
+    [Fact]
+    public void Update_interval_is_saved_and_reschedules()
+    {
+        var vm = Create();
+        Assert.Equal(["Hver halve time", "Hver time", "Hver 2. time", "Hver 4. time (standard)", "Hver 8. time"], vm.Intervals.Select(i => i.Label));
+        Assert.Equal("Hver 4. time (standard)", vm.SelectedInterval.ToString()); // det, en skærmlæser læser op
+        Assert.Equal(240, vm.SelectedInterval.Minutes);
+
+        vm.SelectedInterval = vm.Intervals[0];
+        Assert.Equal(30, _host.Config.Load().UpdateMinutes);
+        Assert.Equal(TimeSpan.FromMinutes(30), _host.Config.Load().UpdateInterval);
+        Assert.Equal(1, _intervalChanges);
+        Assert.Equal(30, Create().SelectedInterval.Minutes); // gemt
+    }
+
+    [Fact]
+    public void Status_event_toggle_is_saved()
+    {
+        var vm = Create();
+        Assert.False(vm.StatusEvent);
+        vm.StatusEvent = true;
+        Assert.True(_host.Config.Load().StatusEvent);
+        Assert.True(Create().StatusEvent);
+        Assert.Equal(0, _intervalChanges);
+    }
+
+    // Hjælp: vejledningen på GitHub, og første start kan gennemgås igen.
+    [Fact]
+    public void Help_opens_guide_and_first_start()
+    {
+        var vm = Create();
+        vm.OpenGuideCommand.Execute(null);
+        Assert.Equal(["https://github.com/rpaasch/AulaSync/blob/master/docs/vejledning.md"], _platform.Opened);
+        vm.ShowOnboardingCommand.Execute(null);
+        Assert.Equal(1, _dialogs.Onboardings);
     }
 
     [AvaloniaFact]
@@ -103,10 +141,18 @@ public class SettingsViewModelTests : IDisposable
         var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
         Assert.Contains("Kalenderprogram", texts);
         Assert.Contains("Fx Thunderbird. Kopiér en .ics-adresse, og indsæt den i et kalenderprogram på denne computer. Opdateres, så længe AulaSync kører.", texts); // kortene
-        Assert.Empty(window.GetVisualDescendants().OfType<ComboBox>());
+        Assert.Single(window.GetVisualDescendants().OfType<ScrollViewer>(), v => v.Parent == window); // kan rulles på en lav skærm
+        var combo = Assert.Single(window.GetVisualDescendants().OfType<ComboBox>()); // kalenderprogrammet er kort, ikke en rullemenu
+        Assert.Equal(5, combo.ItemCount);
+        Assert.Contains("Hent skemaer fra Aula", texts);
+        Assert.Contains("Vis opdateringstid i kalenderen", texts);
         Assert.Contains("Start AulaSync, når jeg logger ind", texts);
+        Assert.Contains("Hjælp", texts);
         Assert.Contains("Fejlfinding", texts);
-        Assert.Contains("Version 3.0.0", texts);
+        Assert.Contains("Version 3.1.0", texts);
+        var buttons = window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).ToList();
+        Assert.Contains("Vejledning", buttons);
+        Assert.Contains("Kom i gang igen…", buttons);
     }
 }
 

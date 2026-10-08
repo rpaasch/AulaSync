@@ -40,25 +40,27 @@ public sealed partial class IcsServer : IDisposable
         _port = port;
     }
 
-    // Et program har hentet en kalenderfil (svaret var 200 eller 304); argumentet er filnavnet, fx "klasse-7.ics".
+    // Et program har hentet en kalenderfil (svaret var 200 eller 304); argumentet er navnet i adressen, fx "klasse-7.ics".
     public event Action<string>? Fetched;
 
     public static string UrlFor(ScheduleRef schedule, int port) => $"http://localhost:{port}/{schedule.FileName}";
 
     public static string WebcalFor(ScheduleRef schedule, int port) => $"webcal://localhost:{port}/{schedule.FileName}";
 
+    // Adressen er skemaets nøgle (medarbejder-1001.ics); filen på disken kan have mere foran (CalendarFiles).
     public static ServeDecision Resolve(string calendarDir, string absolutePath, string method, DateTimeOffset? ifModifiedSince)
     {
         if (method is not ("GET" or "HEAD")) return new(405, null, null);
-        var name = Uri.UnescapeDataString(absolutePath.TrimStart('/'));
+        var name = NameOf(absolutePath);
         if (!CalendarFileName().IsMatch(name)) return new(404, null, null);
-        var path = Path.Combine(calendarDir, name);
-        if (!File.Exists(path)) return new(404, null, null);
+        if (CalendarFiles.Find(calendarDir, name[..^".ics".Length]).FirstOrDefault() is not { } path) return new(404, null, null);
         var written = new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero);
         var lastModified = written.AddTicks(-(written.Ticks % TimeSpan.TicksPerSecond)); // HTTP-datoer har hele sekunder
         if (ifModifiedSince is { } since && lastModified <= since) return new(304, path, lastModified);
         return new(200, path, lastModified);
     }
+
+    static string NameOf(string absolutePath) => Uri.UnescapeDataString(absolutePath.TrimStart('/'));
 
     // 127.0.0.1 skal lykkes (ellers er porten optaget). ::1 skal også lykkes, medmindre computeren ikke har IPv6: optager
     // et andet program [::1]:port, ville kalenderprogrammer, der prøver ::1 først, ende dér, mens AulaSync sagde, at alt kørte.
@@ -166,7 +168,7 @@ public sealed partial class IcsServer : IDisposable
                 var decision = path.StartsWith('/') ? Resolve(_calendarDir, path, method, since) : new(400, null, null);
                 if (decision.StatusCode != 304)
                     LogOnce($"{method} {decision.StatusCode} {path}", $"Kalender-server: {method} {Printable(path)} → {decision.StatusCode}{from}");
-                if (decision.StatusCode is 200 or 304) Fetched?.Invoke(Path.GetFileName(decision.FilePath!));
+                if (decision.StatusCode is 200 or 304) Fetched?.Invoke(NameOf(path));
                 await ReplyAsync(client, stream, decision.StatusCode, decision, method == "GET" ? decision.FilePath : null, timeout.Token);
             }
             catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or ObjectDisposedException)

@@ -7,6 +7,7 @@ public interface IDialogs
 {
     void ShowLogin();
     void ShowSettings();
+    void ShowOnboarding();  // første start, også igen fra Indstillinger › Hjælp
     Task ShowAddScheduleAsync();
     Task<bool> ShowImportGuideAsync(ScheduleRef schedule);   // true = brugeren klikkede Færdig
     Task ShowOutlookFallbackAsync(ScheduleRef schedule);

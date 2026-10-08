@@ -2,7 +2,7 @@
 
 Skemaer fra [Aula](https://www.aula.dk) som kalendere, der holder sig opdateret, på Windows og Mac.
 
-Vælg medarbejdere, klasser og lokaler. Hvert skema bliver sin egen kalender i dit kalenderprogram, og AulaSync henter ændringer fra Aula hver 6. time, så længe programmet kører. AulaSync taler kun med Aula og gemmer alt på din computer.
+Vælg medarbejdere, klasser og lokaler. Hvert skema bliver sin egen kalender i dit kalenderprogram, og AulaSync henter ændringer fra Aula hver 4. time (det kan du ændre i Indstillinger), så længe programmet kører. AulaSync taler kun med Aula og gemmer alt på din computer.
 
 > **Kommer du fra 2.x?** Beskeder synkroniseres ikke længere, og indstillinger fra 2.x overføres ikke. Se [Opgradering fra 2.x](docs/vejledning.md#opgradering-fra-2x).
 
@@ -47,7 +47,7 @@ Appen er endnu ikke signeret af Apple, så første gang skal du give lov. Gør d
 
 ## Kom i gang
 
-Første gang guider AulaSync dig gennem fem korte trin. Efter velkomsten logger du ind på Aula (som du plejer, fx med MitID eller UniLogin), vælger dit kalenderprogram, vælger skemaer og tilføjer dem til din kalender. Bagefter kører AulaSync videre i menulinjen (Mac) eller systembakken (Windows) og starter selv, når du logger ind på computeren.
+Første gang guider AulaSync dig gennem fem korte trin. Efter velkomsten logger du ind på Aula (som du plejer, fx med MitID eller UniLogin), vælger dit kalenderprogram, vælger skemaer og tilføjer dem til din kalender. Bagefter kører AulaSync videre i menulinjen (Mac) eller systembakken (Windows) og starter selv, når du logger ind på computeren. Trinene kan vises igen med **Kom i gang igen…** under Hjælp i Indstillinger, hvor **Vejledning** også åbner vejledningen.
 
 Hele vejledningen står i [docs/vejledning.md](docs/vejledning.md).
 
@@ -62,9 +62,9 @@ AulaSync gemmer alt på din egen computer. Din adgangskode gemmer AulaSync ikke.
 
 | Fil eller mappe | Indhold |
 |---|---|
-| `kalendere/` | Én `.ics`-fil pr. skema |
+| `kalendere/` | Én `.ics`-fil pr. skema, fx `123456-AE-medarbejder-1001.ics`: institutionens nummer, medarbejderens initialer (eller navn, hvis Aula ikke har initialer) eller klassens eller lokalets navn, typen og skemaets Aula-id |
 | `abonnementer.json` | De skemaer, du har valgt |
-| `config.json` | Kalenderprogram, første start og kalender-serverens port |
+| `config.json` | Kalenderprogram, første start, kalender-serverens port, hvor tit skemaerne hentes, og om opdateringstiden vises i kalenderen |
 | `aulasync.log` | Log. Indeholder bl.a. navne og initialer på de skemaer, du har valgt, deres Aula-id'er og din institutions nummer. Højst ca. 1 MB; ældre linjer flyttes til `aulasync.log.old` |
 | `webview/` (Windows) | Login til Aula. Slettes, når du logger ud. Er mappen i brug, slettes cookies i stedet, næste gang AulaSync viser Aulas login |
 | `webview-id.txt` (Mac) | Hvilket login-lager AulaSync bruger. Selve login gemmer macOS i AulaSyncs WebKit-data uden for mappen. Når du logger ud, skifter AulaSync til et nyt, tomt lager; det gamle bruges ikke igen |
@@ -94,7 +94,7 @@ Kalenderne indeholder personoplysninger om dine kolleger: navne, initialer og hv
 
 ## Fejl og forslag
 
-Opret et [issue på GitHub](https://github.com/rpaasch/AulaSync/issues), hvis du finder en fejl eller har et forslag. Vedhæft gerne de sidste linjer fra `aulasync.log` (Indstillinger › Fejlfinding › **Åbn log**). Alle kan læse et issue, så erstat først navne, initialer, din institutions nummer, Aula-id'erne (tallene i filnavne som `medarbejder-….ics`, `klasse-….ics` og `lokale-….ics`) og dit brugernavn i filstier med opdigtede værdier, fx `Anna Eksempel` og `medarbejder-1.ics`.
+Opret et [issue på GitHub](https://github.com/rpaasch/AulaSync/issues), hvis du finder en fejl eller har et forslag. Vedhæft gerne de sidste linjer fra `aulasync.log` (Indstillinger › Fejlfinding › **Åbn log**). Alle kan læse et issue, så erstat først navne, initialer, din institutions nummer, Aula-id'erne og dit brugernavn i filstier med opdigtede værdier, fx `Anna Eksempel`. Filnavnene rummer også institutionens nummer, initialer eller navne og Aula-id'er, fx `123456-AE-medarbejder-1001.ics`; skriv dem fx som `1-XX-medarbejder-1.ics` (både nummer, initialer eller navn og id).
 
 ## Licens
 
