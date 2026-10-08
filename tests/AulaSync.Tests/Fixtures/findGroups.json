@@ -1,0 +1,7 @@
+{"status":{"code":0,"message":"OK"},"data":{"from":0,"size":4,"totalSize":4,"results":[
+ {"id":"88231","name":"7A","docType":"Group","type":"Hovedgruppe"},
+ {"id":"88240","name":"7A dansk","docType":"Group","type":"Hold"},
+ {"id":"88250","name":"Lærerteam","docType":"Group","type":"Team"},
+ {"id":"88260","name":"Testskolen","docType":"Group","type":"institutional"},
+ {"id":"88233","name":"0B","docType":"Group","type":"hovedgruppe"}
+]}}

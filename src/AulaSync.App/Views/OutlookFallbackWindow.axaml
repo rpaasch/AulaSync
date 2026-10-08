@@ -1,0 +1,31 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:AulaSync.App"
+        x:Class="AulaSync.App.OutlookFallbackWindow"
+        x:DataType="app:OutlookFallbackViewModel"
+        Title="Tilføj til Outlook" Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" CanResize="False">
+  <DockPanel>
+    <Border Classes="footer" DockPanel.Dock="Bottom" Background="{DynamicResource SurfaceBrush}" Margin="0,16,0,0">
+      <Button Classes="accent" Content="OK" IsDefault="True" IsCancel="True" HorizontalAlignment="Right" Click="Ok" />
+    </Border>
+    <StackPanel Margin="18,18,18,0" Spacing="12">
+      <TextBlock Classes="h3" FontSize="16" Text="Åbnede Outlook ikke kalenderen?" />
+      <TextBlock Classes="muted" Text="Så kan du tilføje den selv i klassisk Outlook:" TextWrapping="Wrap" />
+      <DockPanel>
+        <Border Classes="number" DockPanel.Dock="Left" Margin="0,0,10,0"><TextBlock Text="1" /></Border>
+        <StackPanel Spacing="7">
+          <TextBlock Classes="step" Text="Kopiér adressen." />
+          <Button Content="{Binding CopyLabel}" Command="{Binding CopyAddressCommand}" />
+        </StackPanel>
+      </DockPanel>
+      <DockPanel>
+        <Border Classes="number" DockPanel.Dock="Left" Margin="0,0,10,0"><TextBlock Text="2" /></Border>
+        <TextBlock Classes="step">
+          <Run Text="I Outlook:" />
+          <Run FontStyle="Italic" Text="Tilføj kalender → Fra internettet" /><Run Text=", og sæt adressen ind." />
+        </TextBlock>
+      </DockPanel>
+    </StackPanel>
+  </DockPanel>
+</Window>

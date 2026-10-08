@@ -1,0 +1,54 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:AulaSync.App"
+        x:Class="AulaSync.App.MainWindow"
+        x:DataType="app:MainViewModel"
+        Title="AulaSync" Width="560" Height="520" MinWidth="420" MinHeight="320"
+        WindowStartupLocation="CenterScreen">
+  <DockPanel>
+    <!-- Bundlinje: statusprik, "Opdateret i dag 14:02 · næste 20:02", Opdatér nu -->
+    <Border Classes="footer" DockPanel.Dock="Bottom">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="{Binding RefreshLabel}" Command="{Binding RefreshCommand}"
+                IsEnabled="{Binding !IsRefreshing}" />
+        <Ellipse Classes="dot" Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}" Margin="0,0,10,0" />
+        <TextBlock Classes="muted" Text="{Binding BottomText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+      </DockPanel>
+    </Border>
+
+    <DockPanel Margin="18,18,18,0">
+      <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+        <Button DockPanel.Dock="Right" Content="+ Tilføj skema" Command="{Binding AddScheduleCommand}" />
+        <TextBlock Classes="h3" Text="Mine skemaer" VerticalAlignment="Center" />
+      </DockPanel>
+
+      <!-- Banner, kun når noget kræver handling -->
+      <Border Classes="banner" DockPanel.Dock="Top" IsVisible="{Binding HasBanner}">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="accent" Content="{Binding BannerAction}"
+                  Command="{Binding RunBannerActionCommand}" IsVisible="{Binding HasBannerAction}" />
+          <TextBlock Text="⚠" Foreground="{DynamicResource WarnBrush}" FontWeight="Bold" Margin="0,0,10,0" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding BannerText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+        </DockPanel>
+      </Border>
+
+      <Border Classes="list" Margin="0,0,0,16" VerticalAlignment="Top">
+        <Panel>
+          <StackPanel IsVisible="{Binding IsEmpty}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" Margin="28">
+            <TextBlock Classes="muted" Text="Ingen skemaer endnu." HorizontalAlignment="Center" />
+            <Button Content="+ Tilføj skema" Command="{Binding AddScheduleCommand}" HorizontalAlignment="Center" />
+          </StackPanel>
+          <ScrollViewer IsVisible="{Binding !IsEmpty}">
+            <ItemsControl ItemsSource="{Binding Rows}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="app:ScheduleRowViewModel">
+                  <app:ScheduleRowView />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Panel>
+      </Border>
+    </DockPanel>
+  </DockPanel>
+</Window>

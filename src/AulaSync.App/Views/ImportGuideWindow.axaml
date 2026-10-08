@@ -1,0 +1,51 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:AulaSync.App"
+        x:Class="AulaSync.App.ImportGuideWindow"
+        x:DataType="app:ImportGuideViewModel"
+        Title="{Binding Title}" Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" CanResize="False">
+  <DockPanel>
+    <Border Classes="footer" DockPanel.Dock="Bottom" Background="{DynamicResource SurfaceBrush}" Margin="0,16,0,0">
+      <StackPanel x:Name="Buttons" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <Button Content="Annullér" IsCancel="True" Click="Cancel" />
+        <Button x:Name="Primary" Classes="accent" Content="Færdig" IsDefault="True" Click="Done" />
+      </StackPanel>
+    </Border>
+    <StackPanel Margin="18,18,18,0" Spacing="12">
+      <DockPanel>
+        <Border Classes="number" DockPanel.Dock="Left" Margin="0,0,10,0"><TextBlock Text="1" /></Border>
+        <StackPanel Spacing="7">
+          <TextBlock Classes="step">
+            <Run FontWeight="SemiBold" Text="Opret en tom kalender" />
+            <Run Text="i Outlook med navnet" />
+            <Run FontWeight="SemiBold" Text="{Binding CalendarName}" /><Run Text="." />
+          </TextBlock>
+          <Button Content="{Binding CopyNameLabel}" Command="{Binding CopyNameCommand}" />
+        </StackPanel>
+      </DockPanel>
+      <DockPanel>
+        <Border Classes="number" DockPanel.Dock="Left" Margin="0,0,10,0"><TextBlock Text="2" /></Border>
+        <StackPanel Spacing="7">
+          <TextBlock Classes="step">
+            <Run FontWeight="SemiBold" Text="Åbn Outlook-kalenderen" />
+            <Run Text="og vælg" />
+            <Run FontStyle="Italic" Text="Tilføj kalender → Upload fra fil" /><Run Text=". Vælg den nye kalender." />
+          </TextBlock>
+          <Button Content="Åbn Outlook på nettet" Command="{Binding OpenOutlookCommand}" />
+        </StackPanel>
+      </DockPanel>
+      <DockPanel>
+        <Border Classes="number" DockPanel.Dock="Left" Margin="0,0,10,0"><TextBlock Text="3" /></Border>
+        <StackPanel Spacing="7">
+          <TextBlock Classes="step">
+            <Run FontWeight="SemiBold" Text="Vælg filen" />
+            <Run FontWeight="SemiBold" Text="{Binding FileName}" /><Run Text="." />
+          </TextBlock>
+          <Button Content="{Binding RevealLabel}" Command="{Binding RevealCommand}" />
+        </StackPanel>
+      </DockPanel>
+      <Border Classes="hint"><TextBlock Text="{Binding Hint}" /></Border>
+    </StackPanel>
+  </DockPanel>
+</Window>

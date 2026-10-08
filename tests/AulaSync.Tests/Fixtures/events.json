@@ -1,0 +1,8 @@
+{"status":{"code":0,"message":"OK"},"data":[
+ {"id":5001,"title":"DAN","startDateTime":"2026-04-13T08:00:00+02:00","endDateTime":"2026-04-13T08:45:00+02:00","primaryResourceText":"53","invitedGroups":[{"name":"7A"}],
+  "lesson":{"lessonStatus":"normal","participants":[{"teacherName":"Anna Eksempel","teacherInitials":"AE","participantRole":"primaryTeacher"},{"teacherName":"Carl Testesen","teacherInitials":"CT","participantRole":"assistingTeacher"}]}},
+ {"id":5002,"title":"MAT","startDateTime":"2026-04-13T09:00:00+02:00","endDateTime":"2026-04-13T09:45:00+02:00","primaryResource":{"name":"54"},"invitedGroups":[{"name":"7B"}],
+  "lesson":{"lessonStatus":"substitute","participants":[{"teacherName":"Anna Eksempel","teacherInitials":"AE","participantRole":"primaryTeacher"},{"teacherName":"Vera Vikar","teacherInitials":"VV","participantRole":"substituteTeacher"}]}},
+ {"id":5003,"title":"<b>Personalemøde</b>","startDateTime":"2026-04-13T14:00:00+02:00","endDateTime":"2026-04-13T15:30:00+02:00"},
+ {"id":5004,"title":"Ødelagt","startDateTime":"ikke-en-dato","endDateTime":"2026-04-13T15:30:00+02:00"}
+]}

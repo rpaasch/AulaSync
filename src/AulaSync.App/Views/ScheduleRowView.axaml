@@ -1,0 +1,49 @@
+<!-- Én række i "Mine skemaer" (hovedvinduet og første start, trin 5). -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="using:AulaSync.App"
+             x:Class="AulaSync.App.ScheduleRowView"
+             x:DataType="app:ScheduleRowViewModel">
+  <Border Classes="item">
+    <StackPanel>
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="⋯" Classes="icon" Margin="12,0,0,0"
+                  AutomationProperties.Name="{Binding MoreLabel}" ToolTip.Tip="{Binding MoreLabel}">
+          <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                <MenuItem Header="{Binding AgainLabel}" Command="{Binding AgainCommand}" />
+                <MenuItem Header="Kopiér adresse" Command="{Binding CopyAddressCommand}" />
+                <MenuItem Header="{Binding RevealLabel}" Command="{Binding RevealCommand}" />
+                <Separator />
+                <MenuItem Header="Fjern skema…" Command="{Binding AskRemoveCommand}" Foreground="{DynamicResource BadBrush}" />
+              </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+        <Button DockPanel.Dock="Right" Classes="accent" Content="{Binding PrimaryLabel}"
+                  Command="{Binding PrimaryCommand}" IsVisible="{Binding HasPrimary}" />
+        <TextBlock DockPanel.Dock="Right" Classes="done" Classes.waiting="{Binding IsWaiting}" Text="{Binding DoneText}" IsVisible="{Binding HasDone}" />
+        <Border DockPanel.Dock="Right" Classes="chip" IsVisible="{Binding HasNote}" Margin="6,0,8,0">
+          <TextBlock Text="{Binding Note}" />
+        </Border>
+        <Border Classes="badge" Classes.staff="{Binding IsEmployee}" Classes.class="{Binding IsGroup}"
+                  Classes.room="{Binding IsResource}" Margin="0,0,12,0">
+          <TextBlock Text="{Binding BadgeText}" />
+        </Border>
+        <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+          <TextBlock Classes="name" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+          <TextBlock Classes="sub" Classes.error="{Binding SubIsError}" Text="{Binding SubText}" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+      </DockPanel>
+      <!-- Fjern skema bekræftes inde i rækken -->
+      <Border Classes="confirm" IsVisible="{Binding IsConfirmingRemove}">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="10,0,0,0">
+              <Button Classes="danger" Content="Fjern" Command="{Binding ConfirmRemoveCommand}" />
+              <Button Content="Annullér" Command="{Binding CancelRemoveCommand}" />
+          </StackPanel>
+          <TextBlock Text="{Binding ConfirmText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+        </DockPanel>
+      </Border>
+    </StackPanel>
+  </Border>
+</UserControl>

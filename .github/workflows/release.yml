@@ -1,0 +1,126 @@
+# Udgivelse af AulaSync (plan Task 20).
+# - Versionsmærke vX.Y.Z: test, byg Windows-exe og Mac-dmg'er, lav en GitHub-udgivelse med filerne og winget-manifesterne.
+# - Push til en gren, der ændrer pakningen, eller kørt i hånden (Actions › Udgivelse › Run workflow, kun fra
+#   standardgrenen): det samme, men kun som artefakter, uden udgivelse. Sti-filteret gælder ikke for versionsmærker.
+name: Udgivelse
+
+on:
+  push:
+    tags: ['v*']
+    branches: ['**']
+    paths: ['packaging/**', '.github/workflows/release.yml']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version til prøvebygningen (uden udgivelse)
+        required: true
+        default: 3.0.0
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then v="${GITHUB_REF_NAME#v}"
+          elif [ -n "$INPUT_VERSION" ]; then v="$INPUT_VERSION"
+          else v=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/AulaSync.App/AulaSync.App.csproj | head -1); fi
+          if ! [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "Ugyldig version: $v (forventet fx 3.0.0)"; exit 1; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test AulaSync.slnx -c Release
+
+  windows:
+    needs: [version, test]
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Byg AulaSync.exe (selvstændig, én fil)
+        run: >
+          dotnet publish src/AulaSync.App -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none -p:Version=${{ needs.version.outputs.version }} -o out/win
+      - name: winget-manifester
+        run: bash packaging/winget/make-manifests.sh "${{ needs.version.outputs.version }}" out/win/AulaSync.exe "$GITHUB_REPOSITORY" out/winget
+      - name: Tjek manifesterne mod winget-skemaerne
+        run: |
+          pip install --quiet check-jsonschema
+          d="out/winget/manifests/r/rpaasch/AulaSync/${{ needs.version.outputs.version }}"
+          check-jsonschema --schemafile https://aka.ms/winget-manifest.version.1.6.0.schema.json "$d/rpaasch.AulaSync.yaml"
+          check-jsonschema --schemafile https://aka.ms/winget-manifest.installer.1.6.0.schema.json "$d/rpaasch.AulaSync.installer.yaml"
+          check-jsonschema --schemafile https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json "$d/rpaasch.AulaSync.locale.da-DK.yaml"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: out/win/AulaSync.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: winget
+          path: out/winget
+
+  mac:
+    needs: [version, test]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Byg AulaSync.app og .dmg (Apple Silicon og Intel)
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          for rid in osx-arm64 osx-x64; do
+            dotnet publish src/AulaSync.App -c Release -r "$rid" --self-contained true -p:DebugType=none -p:Version="$v" -o "out/$rid"
+            bash packaging/mac/make-dmg.sh "$rid" "out/$rid" "$v" out/dmg
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: out/dmg/*.dmg
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [version, windows, mac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Lav udgivelsen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          (cd artifacts/winget && zip -qr "../../winget-manifests-$v.zip" manifests)
+          gh release create "$GITHUB_REF_NAME" --title "AulaSync $v" --notes-file packaging/release-notes.md \
+            artifacts/windows/AulaSync.exe artifacts/mac/*.dmg "winget-manifests-$v.zip"

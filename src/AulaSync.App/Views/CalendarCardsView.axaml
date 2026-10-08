@@ -1,0 +1,24 @@
+<!-- De fire kort med kalenderprogrammer: første start (trin 3) og Indstillinger. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="using:AulaSync.App"
+             x:Class="AulaSync.App.CalendarCardsView"
+             x:DataType="app:ICalendarCards">
+  <ItemsControl ItemsSource="{Binding Cards}">
+    <ItemsControl.ItemsPanel>
+      <ItemsPanelTemplate><UniformGrid Columns="2" ColumnSpacing="10" RowSpacing="10" /></ItemsPanelTemplate>
+    </ItemsControl.ItemsPanel>
+    <ItemsControl.ItemTemplate>
+      <DataTemplate x:DataType="app:CalendarCardViewModel">
+        <RadioButton GroupName="CalendarApp" IsChecked="{Binding IsSelected, Mode=OneWay}" Command="{Binding SelectCommand}"
+                     Theme="{StaticResource CalendarCard}" AutomationProperties.Name="{Binding Title}">
+          <StackPanel Spacing="3">
+            <TextBlock Text="{Binding Title}" FontSize="13.5" FontWeight="Bold" TextWrapping="Wrap" />
+            <TextBlock Classes="sub mode" Classes.ok="{Binding IsAutomatic}" Text="{Binding Mode}" />
+            <TextBlock Classes="sub" Text="{Binding Description}" TextWrapping="Wrap" />
+          </StackPanel>
+        </RadioButton>
+      </DataTemplate>
+    </ItemsControl.ItemTemplate>
+  </ItemsControl>
+</UserControl>

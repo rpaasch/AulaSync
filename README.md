@@ -1,124 +1,101 @@
 # AulaSync
 
-Synkroniserer beskeder og skemaer fra [Aula](https://www.aula.dk) til Microsoft Outlook. Virker med alle kommuners login (UniLogin, Azure AD, MitID m.fl.).
+Skemaer fra [Aula](https://www.aula.dk) som kalendere, der holder sig opdateret, på Windows og Mac.
 
-## Features
+Vælg medarbejdere, klasser og lokaler. Hvert skema bliver sin egen kalender i dit kalenderprogram, og AulaSync henter ændringer fra Aula hver 6. time, så længe programmet kører. AulaSync taler kun med Aula og gemmer alt på din computer.
 
-### Beskeder
-- **Korrekte tidsstempler** - beskeder vises med Aulas dato, ikke importtidspunktet
-- **Korrekte afsendere** - viser den rigtige afsender i Outlook
-- **Read-only** - importerede beskeder kan ikke redigeres ved et uheld
-- **Automatisk synkronisering** - konfigurerbart interval (2 min - 1 time)
+> **Kommer du fra 2.x?** Beskeder synkroniseres ikke længere, og indstillinger fra 2.x overføres ikke. Se [Opgradering fra 2.x](docs/vejledning.md#opgradering-fra-2x).
 
-### Skemaer
-- **Medarbejderskemaer** - se kollegers ugeskema direkte i Outlook
-- **Klasseskemaer** - se en klasses ugeskema
-- **Lokaleskemaer** - se hvad der sker i et lokale
-- Format tilpasset kontekst: `FAG | Lokale | Klasse` / `FAG | Lokale | INIT` / `FAG | Klasse | INIT`
-- 3 måneder frem + 3 måneder tilbage
-- Automatisk opdatering hver time
+## Kalenderprogrammer
 
-### Generelt
-- **Browser-baseret login** via WebView2 - understøtter alle kommuners IdP
-- **System tray** - kører diskret i baggrunden
-- **Autostart** - kan starte automatisk ved Windows-login
+| Kalenderprogram | Knappen i AulaSync | Opdateres |
+|---|---|---|
+| Apple Kalender (Mac) | **Tilføj til Kalender** | automatisk |
+| Outlook (klassisk) på Windows | **Tilføj til Outlook** | automatisk |
+| Ny Outlook, Outlook til Mac og Outlook på nettet | **Importér…** | ikke automatisk (øjebliksbillede); AulaSync siger til, når skemaet er ændret |
+| Andet program på samme computer, fx Thunderbird | **Kopiér adresse** | automatisk |
+
+**AulaSync og kalenderprogrammet skal køre på samme computer.** Kalenderprogrammet henter skemaerne fra AulaSync på `http://localhost:9876` (eller en af de næste porte, hvis 9876 var optaget ved første start), altså din egen computer. En kalender på nettet eller på telefonen kan ikke nå den. Det gælder også ny Outlook, Outlook til Mac og Outlook på nettet, som henter kalendere gennem Microsofts servere. Til dem importerer du i stedet skemaet som en fil med **Importér…**. I Apple Kalender skal abonnementet ligge **På min Mac**, ikke i iCloud.
 
 ## Installation
 
-1. Download `AulaSync.exe` fra [Releases](https://github.com/rpaasch/AulaSync/releases)
-2. Kør filen - ingen installation nødvendig
+### Windows 10 og 11 (64-bit)
 
-Eller via winget (når godkendt):
+Hent `AulaSync.exe` fra [den nyeste udgave](https://github.com/rpaasch/AulaSync/releases/latest), læg den i en fast mappe, fx **Dokumenter**, og dobbeltklik på den. Flyt den ikke bagefter, for AulaSync starter derfra, når du logger ind. Det kræver ingen installation og ingen administratorrettigheder.
+
+Programmet er ikke signeret: viser Windows "Windows beskyttede din pc", så vælg **Flere oplysninger** › **Kør alligevel**. Gør det kun med en `AulaSync.exe`, du selv har hentet fra udgivelsessiden. Mangler **Kør alligevel**, eller siger Windows, at programmet er blokeret, har computerens administrator lukket for programmer, der ikke er godkendt. Så spørg skolens IT.
+
+Med winget: højreklik på Start-knappen, vælg **Terminal** (på Windows 10: **Windows PowerShell**), og skriv:
+
 ```
 winget install rpaasch.AulaSync
 ```
 
-Kommunal udrulning (SCCM/Intune):
-```
-AulaSync.exe --silent
-```
-Starter i system tray uden login-vindue. Brugeren logger ind ved at klikke på ikonet.
+winget laver ingen genvej i Start-menuen, så første gang starter du AulaSync ved at åbne et nyt vindue på samme måde og skrive `AulaSync`. En ny udgave kommer først i winget, når Microsoft har godkendt den. Installerer winget version 2.x, så hent `AulaSync.exe` som beskrevet ovenfor i stedet.
 
-## Vejledning
+Login bruger Microsoft Edge WebView2 Runtime, som følger med Windows 11 og findes på de fleste computere med Windows 10. Mangler den, siger AulaSync til.
 
-### Første gang
+### Mac (macOS 15 eller nyere)
 
-1. Start `AulaSync.exe`
-2. Et login-vindue åbner med Aula - log ind som du plejer
-3. Vælg den rigtige rolle (medarbejder/forælder) og institution
-4. Vinduet lukker automatisk når login er færdigt
-5. Beskeder importeres til mappen **Indbakke → Aula** i Outlook
-6. AulaSync kører i system tray (ikonet ved uret)
+Hent `AulaSync-<version>-arm64.dmg` (Apple-chip, M1 og nyere) eller `AulaSync-<version>-x64.dmg` (Intel) fra [den nyeste udgave](https://github.com/rpaasch/AulaSync/releases/latest), åbn den, og træk AulaSync over i **Programmer**.
 
-### Tray-menu
+Appen er endnu ikke signeret af Apple, så første gang skal du give lov. Gør det kun, hvis du selv har hentet `.dmg`-filen fra udgivelsessiden:
 
-| Menupunkt | Beskrivelse |
-|-----------|-------------|
-| **Synkronisér beskeder** | Hent nye beskeder med det samme |
-| **Medarbejderskemaer til Outlook** | Vælg en kollega og se deres skema |
-| **Klasseskemaer til Outlook** | Vælg en klasse og se ugeskemaet |
-| **Lokaleskemaer til Outlook** | Vælg et lokale og se bookinger |
-| **Indstillinger** | Synkinterval, autostart, log, vejledning m.m. |
-| **Log ud** | Log ud og vis login igen |
-| **Afslut** | Luk programmet |
+1. Åbn AulaSync fra **Programmer** (ikke fra `.dmg`-filen, ellers kan AulaSync ikke starte af sig selv, når du logger ind). macOS siger, at appen ikke blev åbnet. Klik **Udført**, ikke **Flyt til papirkurv**.
+2. Åbn **Systemindstillinger › Anonymitet og sikkerhed**, rul ned, og klik **Åbn alligevel** ved AulaSync. Knappen står der kun i cirka en time. Er den væk, så åbn AulaSync fra Programmer igen.
+3. Når macOS spørger igen, så klik **Åbn alligevel**, og bekræft med adgangskoden til din Mac eller med Touch ID.
 
-### Beskeder i Outlook
+## Kom i gang
 
-- Beskeder placeres i mappen **Indbakke → Aula**
-- Viser korrekt dato og afsender
-- Klik "Åbn i Aula" i beskeden for at se den direkte i Aula
+Første gang guider AulaSync dig gennem fem korte trin. Efter velkomsten logger du ind på Aula (som du plejer, fx med MitID eller UniLogin), vælger dit kalenderprogram, vælger skemaer og tilføjer dem til din kalender. Bagefter kører AulaSync videre i menulinjen (Mac) eller systembakken (Windows) og starter selv, når du logger ind på computeren.
 
-### Skemaer i Outlook
+Hele vejledningen står i [docs/vejledning.md](docs/vejledning.md).
 
-- Skemaer leveres som ICS-kalendere via lokal webserver (port 9876)
-- Viser fag, lokale, klasse og lærer direkte i kalendervisningen
-- Rullende sync: én kalender opdateres ad gangen (konfigurerbar 4-12 timers cyklus)
+## Data og privatliv
 
-## Teknisk
+AulaSync gemmer alt på din egen computer. Din adgangskode gemmer AulaSync ikke. Du logger ind på Aulas egen login-side, og AulaSync gemmer cookies fra Aula og fra login-tjenesten (fx UniLogin eller din kommunes login) i en browserprofil. Så forbliver du logget ind, og AulaSync kan selv logge ind igen i baggrunden, så længe login-tjenesten husker dig. Filerne ligger her:
 
-- **.NET 8** WinForms app med WebView2
-- **Outlook COM/MAPI** til oprettelse af beskeder
-- **ICS + lokal HTTP-server** til kalender-subscriptions
-- **Direkte MAPI** (`mapi32.dll` P/Invoke) til korrekte tidsstempler
-- Aktiv profil hentes via `profiles.getProfileContext` (korrekt multi-institution)
-- Kalenderdata hentes i bidder af max 42 dage (API-begrænsning)
-- Retry-logik med exponential backoff på alle HTTP-kald
-- Atomisk fil-skrivning for data-integritet
-- Log-rotation ved 1 MB
+| | |
+|---|---|
+| Windows | `%LOCALAPPDATA%\AulaSync` |
+| Mac | `~/Library/Application Support/AulaSync` |
 
-## Krav
+| Fil eller mappe | Indhold |
+|---|---|
+| `kalendere/` | Én `.ics`-fil pr. skema |
+| `abonnementer.json` | De skemaer, du har valgt |
+| `config.json` | Kalenderprogram, første start og kalender-serverens port |
+| `aulasync.log` | Log. Indeholder bl.a. navne og initialer på de skemaer, du har valgt, deres Aula-id'er og din institutions nummer. Højst ca. 1 MB; ældre linjer flyttes til `aulasync.log.old` |
+| `webview/` (Windows) | Login til Aula. Slettes, når du logger ud. Er mappen i brug, slettes cookies i stedet, næste gang AulaSync viser Aulas login |
+| `webview-id.txt` (Mac) | Hvilket login-lager AulaSync bruger. Selve login gemmer macOS i AulaSyncs WebKit-data uden for mappen. Når du logger ud, skifter AulaSync til et nyt, tomt lager; det gamle bruges ikke igen |
 
-- Windows 10/11
-- Microsoft Outlook (klassisk, ikke ny Outlook)
-- Edge WebView2 Runtime (følger med Windows 11)
+Kalender-serveren tager kun imod forbindelser fra din egen computer (`127.0.0.1` og `::1`) og udleverer kun skemafilerne. En hjemmeside i din browser kan ikke læse dem. Serveren har ingen adgangskode, så andre programmer og andre brugere, der er logget ind på samme computer, kan hente skemaerne. Porten vælges ved første start: 9876 eller den første ledige op til 9899, så flere brugere på samme computer som regel kan køre AulaSync samtidig. Porten reserveres dog ikke: kørte en anden brugers AulaSync ikke, da du startede AulaSync første gang, kan I få samme port, og så kan kun én af jer ad gangen køre kalender-serveren.
+
+**Log ud…** i Indstillinger glemmer dit login og sletter dine valgte skemaer, og første start vises igen. Kalenderfilerne bliver liggende, så kalenderne viser stadig de seneste skemaer, men de bliver ikke opdateret, før du vælger skemaerne igen. Vil du fjerne alt, så slå **Start AulaSync, når jeg logger ind** fra i Indstillinger, vælg **Afslut AulaSync**, slet mappen ovenfor, og slet AulaSync-kalenderne i dit kalenderprogram. På Mac ligger dit login til Aula i AulaSyncs WebKit-data uden for mappen, normalt i `~/Library/WebKit/dk.rpaasch.aulasync`; slet også den mappe.
+
+Importerer du et skema i ny Outlook, Outlook til Mac eller Outlook på nettet, ligger det bagefter også i din Outlook-konto hos Microsoft.
 
 ## Byg selv
 
-```bash
-dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o publish
+Kræver [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+
+```
+dotnet run --project src/AulaSync.App
+dotnet test AulaSync.slnx
 ```
 
-## Disclaimer
+En udgivelse laves af GitHub Actions (`.github/workflows/release.yml`), når et versionsmærke som `v3.0.0` pushes: Windows-exe, Mac-dmg'er og winget-manifester (se `packaging/`).
 
-AulaSync er et uafhængigt open source-projekt og er **ikke affilieret med, godkendt af eller supporteret af Aula, KMD eller Kombit**. Appen bruger Aulas interne API, som ikke er offentligt dokumenteret og kan ændre sig uden varsel. Brug på eget ansvar.
+## Ansvarsfraskrivelse
 
-## Data
+AulaSync er et uafhængigt open source-projekt og er **ikke tilknyttet, godkendt af eller supporteret af Aula, KOMBIT, Netcompany eller KMD**. Appen bruger Aulas interne API, som ikke er offentligt dokumenteret og kan ændre sig uden varsel, så AulaSync kan holde op med at virke fra den ene dag til den anden.
 
-Konfiguration gemmes i `%USERPROFILE%\.aulasync\`:
-
-| Fil | Indhold |
-|-----|---------|
-| `config.json` | Synkinterval m.m. |
-| `aulasync.log` | Logfil (max 1 MB, roteres) |
-| `seen_threads.json` | Importerede beskeder |
-| `subscribed_calendars.json` | Abonnerede skemaer |
-| `kalendere/` | ICS-filer serveret via localhost:9876 |
-| `webview2/` | Browser-session (slettet ved logout) |
+Kalenderne indeholder personoplysninger om dine kolleger: navne, initialer og hvem der er vikar for hvem. Følg din skoles og kommunes regler for, hvor de må ligge, også når du importerer dem i ny Outlook, Outlook til Mac eller Outlook på nettet, som gemmer dem hos Microsoft. Brug på eget ansvar.
 
 ## Fejl og forslag
 
-Opret et [issue på GitHub](https://github.com/rpaasch/AulaSync/issues) hvis du finder en fejl eller har et forslag.
+Opret et [issue på GitHub](https://github.com/rpaasch/AulaSync/issues), hvis du finder en fejl eller har et forslag. Vedhæft gerne de sidste linjer fra `aulasync.log` (Indstillinger › Fejlfinding › **Åbn log**). Alle kan læse et issue, så erstat først navne, initialer, din institutions nummer, Aula-id'erne (tallene i filnavne som `medarbejder-….ics`, `klasse-….ics` og `lokale-….ics`) og dit brugernavn i filstier med opdigtede værdier, fx `Anna Eksempel` og `medarbejder-1.ics`.
 
 ## Licens
 
-MIT License — se [LICENSE](LICENSE) for detaljer.
+MIT. Se [LICENSE](LICENSE).

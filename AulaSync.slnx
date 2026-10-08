@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AulaSync.Core/AulaSync.Core.csproj" />
+    <Project Path="src/AulaSync.App/AulaSync.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AulaSync.Tests/AulaSync.Tests.csproj" />
+    <Project Path="tests/AulaSync.App.Tests/AulaSync.App.Tests.csproj" />
+  </Folder>
+</Solution>

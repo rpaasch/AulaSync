@@ -1,0 +1,5 @@
+{"status":{"code":0,"message":"OK"},"data":{"institutionProfiles":[
+ {"id":1001,"fullName":"Anna Bech Eksempel","shortName":"AE","institutionRole":"teacher"},
+ {"id":3001,"fullName":"Lene Leder","shortName":"LL","institutionRole":"leader"},
+ {"id":3002,"fullName":"Per Pedel","shortName":"PP","institutionRole":"technical"}
+]}}
