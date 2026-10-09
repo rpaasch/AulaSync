@@ -23,18 +23,136 @@ public class AutostartTests
         autostart.SetEnabled(false);
         Assert.False(autostart.IsEnabled);
     }
+
+    // Start ved login følger med, når AulaSync kører fra et nyt sted; er det slået fra, røres intet.
+    [Fact]
+    public void Mac_launch_agent_follows_the_running_app()
+    {
+        using var home = new TempDir();
+        var old = new MacAutostart(home.Path, "/Users/anna/Downloads/AulaSync.app/Contents/MacOS/AulaSync");
+        var moved = new MacAutostart(home.Path, "/Applications/AulaSync.app/Contents/MacOS/AulaSync");
+        Assert.False(moved.Retarget());
+        Assert.False(File.Exists(LaunchAgent.PlistPath(home.Path)));
+
+        old.SetEnabled(true);
+        Assert.True(moved.Retarget());
+        Assert.Contains("/Applications/AulaSync.app", File.ReadAllText(LaunchAgent.PlistPath(home.Path)));
+        Assert.False(moved.Retarget());
+
+        // Åbnet fra .dmg-filen eller macOS' midlertidige kopi: startpunktet bliver i Programmer.
+        Assert.False(new MacAutostart(home.Path, "/Volumes/AulaSync 3.2.0/AulaSync.app/Contents/MacOS/AulaSync").Retarget());
+        Assert.False(new MacAutostart(home.Path, "/private/var/folders/x/AppTranslocation/1/d/AulaSync.app/Contents/MacOS/AulaSync").Retarget());
+        Assert.Contains("/Applications/AulaSync.app", File.ReadAllText(LaunchAgent.PlistPath(home.Path)));
+    }
+
+    [Fact]
+    public void Windows_run_value_follows_the_running_exe()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Startværdien findes kun på Windows");
+            return;
+        }
+        var key = $@"Software\AulaSyncTest-{Guid.NewGuid():N}";
+        try
+        {
+            var old = new WindowsAutostart(@"C:\Users\Anna\Documents\AulaSync.exe", key);
+            var installed = new WindowsAutostart(@"C:\Users\Anna\AppData\Local\Programs\AulaSync\AulaSync.exe", key);
+            Assert.False(installed.Retarget());
+            Assert.False(installed.IsEnabled);
+
+            old.SetEnabled(true);
+            Assert.True(installed.Retarget());
+            Assert.False(installed.Retarget());
+            Assert.Equal(@"""C:\Users\Anna\AppData\Local\Programs\AulaSync\AulaSync.exe"" --silent",
+                Microsoft.Win32.Registry.CurrentUser.OpenSubKey(key)!.GetValue("AulaSync"));
+        }
+        finally { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(key, throwOnMissingSubKey: false); }
+    }
 }
 
+// Systembakken (Windows) og menulinjen (Mac) bruger AulaSyncs eget ikon (packaging/icon/tray, make-icons.py).
 public class TrayIconImageTests
 {
+    static readonly int[] TraySizes = [16, 20, 24, 28, 32, 36, 40, 48, 56, 64];
+
+    static byte[] Bytes(Uri uri)
+    {
+        using var stream = AssetLoader.Open(uri);
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        return copy.ToArray();
+    }
+
+    // Størrelserne i en .ico og hver størrelses billeddata (PNG).
+    static Dictionary<int, byte[]> Frames(byte[] ico)
+    {
+        var frames = new Dictionary<int, byte[]>();
+        for (int i = 0; i < BitConverter.ToUInt16(ico, 4); i++)
+        {
+            var entry = 6 + 16 * i;
+            var size = ico[entry] == 0 ? 256 : ico[entry];
+            frames[size] = ico.AsSpan(BitConverter.ToInt32(ico, entry + 12), BitConverter.ToInt32(ico, entry + 8)).ToArray();
+        }
+        return frames;
+    }
+
     [AvaloniaTheory]
     [InlineData(TrayState.Normal)]
     [InlineData(TrayState.Updating)]
     [InlineData(TrayState.Attention)]
-    public void Renders_every_state(TrayState state)
+    public void Every_state_has_an_icon_on_both_platforms(TrayState state)
     {
-        using var bitmap = TrayIconImage.Render(state, template: true);
-        Assert.Equal(new PixelSize(64, 64), bitmap.PixelSize);
+        Assert.True(AssetLoader.Exists(TrayIconImage.Uri(state, template: false)));
+        Assert.True(AssetLoader.Exists(TrayIconImage.Uri(state, template: true)));
+        Assert.Same(TrayIconImage.Create(state, template: false), TrayIconImage.Create(state, template: false));
+    }
+
+    // Windows: alle størrelser fra 16 til 64 px, så Windows ikke selv skalerer et stort billede ned (det sløres).
+    [AvaloniaFact]
+    public void Windows_icons_have_every_size()
+    {
+        foreach (var state in Enum.GetValues<TrayState>())
+            Assert.Equal(TraySizes, Frames(Bytes(TrayIconImage.Uri(state, template: false))).Keys.Order());
+    }
+
+    // Uden opdatering eller besked er systembakkeikonet præcis AulaSyncs ikon.
+    [AvaloniaFact]
+    public void Normal_tray_icon_is_the_app_icon()
+    {
+        var tray = Frames(Bytes(TrayIconImage.Uri(TrayState.Normal, template: false)));
+        var app = Frames(Bytes(new Uri("avares://AulaSync/Assets/AulaSync.ico")));
+        foreach (var size in TraySizes.Where(app.ContainsKey))
+            Assert.Equal(app[size], tray[size]);
+        Assert.NotEqual(tray[32], Frames(Bytes(TrayIconImage.Uri(TrayState.Updating, template: false)))[32]);
+        Assert.NotEqual(tray[32], Frames(Bytes(TrayIconImage.Uri(TrayState.Attention, template: false)))[32]);
+    }
+
+    // Mac: 36 px (18 punkter på Retina), kun sort med gennemsigtighed, så macOS kan farve det efter menulinjen.
+    [AvaloniaFact]
+    public void Mac_icons_are_black_templates()
+    {
+        var states = new List<byte[]>();
+        foreach (var state in Enum.GetValues<TrayState>())
+        {
+            using var stream = AssetLoader.Open(TrayIconImage.Uri(state, template: true));
+            using var bitmap = new Avalonia.Media.Imaging.Bitmap(stream);
+            Assert.Equal(new PixelSize(36, 36), bitmap.PixelSize);
+            var pixels = new byte[36 * 36 * 4];
+            var buffer = Marshal.AllocHGlobal(pixels.Length);
+            try
+            {
+                bitmap.CopyPixels(new PixelRect(0, 0, 36, 36), buffer, pixels.Length, 36 * 4);
+                Marshal.Copy(buffer, pixels, 0, pixels.Length);
+            }
+            finally { Marshal.FreeHGlobal(buffer); }
+            for (int i = 0; i < pixels.Length; i += 4)
+                if (pixels[i + 3] > 0) Assert.True(pixels[i] == 0 && pixels[i + 1] == 0 && pixels[i + 2] == 0, "Kun sort");
+            Assert.Contains(pixels.Where((_, i) => i % 4 == 3), a => a == 0);
+            Assert.Contains(pixels.Where((_, i) => i % 4 == 3), a => a == 255);
+            states.Add(pixels);
+        }
+        Assert.Equal(3, states.Select(Convert.ToBase64String).Distinct().Count());
     }
 }
 
@@ -205,7 +323,22 @@ public class StartMenuShortcutTests
         var exe = Path.Combine(dir.Path, "AulaSync.exe");
         Assert.Equal(exe, StartMenuShortcut.RealPath(exe));
         File.WriteAllText(exe, "");
-        Assert.Equal(exe, StartMenuShortcut.RealPath(exe));
+        Assert.Equal(StartMenuShortcut.LongPath(exe), StartMenuShortcut.RealPath(exe));
+    }
+
+    // Windows: en sti med korte 8.3-navne (fx TEMP på GitHubs maskine: C:\Users\RUNNER~1\…) foldes ud, så genvejen og
+    // start ved login peger på den samme sti, som Windows viser.
+    [Fact]
+    public void Short_names_are_expanded()
+    {
+        if (!OperatingSystem.IsWindows()) Assert.Skip("Kun Windows har korte 8.3-navne");
+        using var dir = new TempDir();
+        var exe = Path.Combine(dir.Path, "AulaSync.exe");
+        File.WriteAllText(exe, "");
+        var real = StartMenuShortcut.RealPath(exe);
+        Assert.DoesNotContain("~", real);
+        Assert.Equal(new FileInfo(exe).Length, new FileInfo(real).Length);
+        Assert.Equal("AulaSync.exe", Path.GetFileName(real));
     }
 
     // winget starter AulaSync gennem en henvisning (Links\AulaSync.exe); genvejen skal pege på selve filen.
@@ -228,7 +361,7 @@ public class StartMenuShortcutTests
         Assert.True(File.Exists(resolved));
 
         File.Delete(real);
-        Assert.Equal(alias, StartMenuShortcut.RealPath(alias));
+        Assert.Equal(StartMenuShortcut.LongPath(alias), StartMenuShortcut.RealPath(alias));
     }
 
     [Fact]
@@ -263,6 +396,98 @@ public class StartMenuShortcutTests
         File.WriteAllText(link, "ikke en genvej");
         Assert.True(StartMenuShortcut.Ensure(link, exe));
         Assert.Equal(exe, StartMenuShortcut.ReadTarget(link), ignoreCase: true);
+    }
+
+    // "Afinstallér AulaSync…": genvejen slettes, når den peger på denne AulaSync, er ødelagt eller peger på en fil, der ikke
+    // findes; en genvej til en anden AulaSync, der findes, bliver.
+    [Fact]
+    public void Remove_only_our_shortcut()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Genveje findes kun på Windows");
+            return;
+        }
+        using var dir = new TempDir();
+        var link = Path.Combine(dir.Path, StartMenuShortcut.FileName);
+        var other = Path.Combine(dir.Path, "Anden", "AulaSync.exe");
+        var exe = Path.Combine(dir.Path, "Ny", "AulaSync.exe");
+        foreach (var file in new[] { other, exe })
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllText(file, "");
+        }
+
+        Assert.False(StartMenuShortcut.Remove(link, exe)); // ingen genvej
+        StartMenuShortcut.Ensure(link, other);
+        Assert.False(StartMenuShortcut.Remove(link, exe));
+        Assert.True(File.Exists(link));
+        File.Delete(other);
+        Assert.True(StartMenuShortcut.Remove(link, exe));
+        Assert.False(File.Exists(link));
+
+        StartMenuShortcut.Ensure(link, exe);
+        Assert.True(StartMenuShortcut.Remove(link, exe.ToUpperInvariant()));
+        File.WriteAllText(link, "ikke en genvej");
+        Assert.True(StartMenuShortcut.Remove(link, exe));
+    }
+}
+
+// Installationsprogrammet kører AulaSync.exe --quit, før filerne skiftes ud: den kørende AulaSync får besked og afslutter,
+// og --quit venter, til låsen er fri (2, så den startes igen bagefter). En ældre udgave, der ikke kender beskeden, giver 1,
+// så installationsprogrammet selv lukker den. Kørte ingen, giver den 0.
+public class QuitRunningTests
+{
+    [Fact]
+    public void Nothing_to_quit_when_AulaSync_never_ran()
+    {
+        using var dir = new TempDir();
+        Assert.Equal(0, Program.QuitRunning(Path.Combine(dir.Path, "aulasync.lock"), "AulaSync-ingen", TimeSpan.FromSeconds(1)));
+        Assert.False(File.Exists(Path.Combine(dir.Path, "aulasync.lock")));
+    }
+
+    [Fact]
+    public void The_running_instance_quits_and_the_lock_is_released()
+    {
+        using var dir = new TempDir();
+        var lockFile = Path.Combine(dir.Path, "aulasync.lock");
+        var name = "AulaSync-test-" + Guid.NewGuid().ToString("N")[..8];
+        var running = SingleInstance.TryAcquire(lockFile)!;
+        using var channel = new InstanceChannel(name);
+        channel.Listen(() => { }, () => running.Dispose());
+
+        Assert.Equal(2, Program.QuitRunning(lockFile, name, TimeSpan.FromSeconds(10)));
+    }
+
+    [Fact]
+    public void An_instance_that_does_not_answer_is_reported()
+    {
+        using var dir = new TempDir();
+        var lockFile = Path.Combine(dir.Path, "aulasync.lock");
+        using var running = SingleInstance.TryAcquire(lockFile)!;
+
+        Assert.Equal(1, Program.QuitRunning(lockFile, "AulaSync-ingen-" + Guid.NewGuid().ToString("N")[..8], TimeSpan.FromSeconds(1)));
+    }
+}
+
+// AulaSyncs ikon (packaging/icon/make-icons.py) ligger i appen og har alle Windows-størrelser op til 256.
+public class AppIconTests
+{
+    [AvaloniaFact]
+    public void The_icon_is_an_ico_with_all_sizes()
+    {
+        Assert.True(Avalonia.Platform.AssetLoader.Exists(App.IconUri));
+        using var stream = Avalonia.Platform.AssetLoader.Open(App.IconUri);
+        using var reader = new BinaryReader(stream);
+        Assert.Equal(0, reader.ReadUInt16());
+        Assert.Equal(1, reader.ReadUInt16());
+        var sizes = Enumerable.Range(0, reader.ReadUInt16()).Select(_ =>
+        {
+            var size = reader.ReadByte();
+            reader.ReadBytes(15);
+            return size == 0 ? 256 : (int)size;
+        }).ToList();
+        Assert.Equal([16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 128, 256], sizes.Order());
     }
 }
 

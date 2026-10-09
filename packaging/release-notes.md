@@ -1,5 +1,13 @@
 AulaSync 3 er en ny udgave med ét formål: skemaer fra Aula, der holder sig opdateret i din kalender, på Windows og Mac.
 
+**Nyt i 3.2.0**
+- Windows: AulaSync har fået et installationsprogram, `AulaSync-Setup.exe`. Det installerer AulaSync for dig uden administratorrettigheder, lægger den i Start-menuen og åbner den. `winget install rpaasch.AulaSync` gør det samme. Opdatering med `AulaSync-Setup.exe` lukker en kørende AulaSync og starter den igen.
+- AulaSync har fået sit eget ikon på Windows og Mac, også i systembakken og menulinjen. Har du fastgjort en ældre AulaSync til proceslinjen, så frigør den, og fastgør AulaSync igen fra Start-menuen.
+- *Vis opdateringstid i kalenderen*: aftalen mandag kl. 5.45 viser nu kort, hvornår skemaet blev hentet, fx "Opd. 091026@07:30", og beskrivelsen siger det samme.
+- Har du en ældre AulaSync uden installation, så installér `AulaSync-Setup.exe`. Start ved login og genvejen i Start-menuen flytter med, og bagefter kan du slette den gamle `AulaSync.exe`. Har du AulaSync fra winget, så vælg *Afslut AulaSync*, skriv `winget upgrade rpaasch.AulaSync`, og start AulaSync fra Start-menuen.
+- *Afinstallér AulaSync…* i Indstillinger fjerner alt, AulaSync har gemt på computeren: programmet, start ved login, dit login, dine indstillinger, loggen og kalenderfilerne. Det samme sker på Windows fra *Indstillinger › Apps* og med `winget uninstall rpaasch.AulaSync`. Har du AulaSync fra winget fra før 3.2, sletter de to kun programmet; brug *Afinstallér AulaSync…*. Slet bagefter AulaSync-kalenderne i dit kalenderprogram.
+- Har du slettet en kalender i dit kalenderprogram, opdager AulaSync det: henter programmet dine andre skemaer, men ikke dette, står der fx "Ikke hentet af Outlook siden 5. okt.", og ved Outlook kommer knappen igen.
+
 **Nyt i 3.1.1**
 - Windows: AulaSync ligger i Start-menuen, når den har kørt første gang, så du kan finde den ved at skrive *AulaSync* i Start. Det gælder også, når du har installeret den med winget. En genvej fra den gamle AulaSync 2 bliver rettet, så den starter den nye.
 
@@ -21,7 +29,7 @@ AulaSync 3 er en ny udgave med ét formål: skemaer fra Aula, der holder sig opd
 - Ny Outlook, Outlook til Mac og Outlook på nettet henter kalendere gennem Microsofts servere, som ikke kan nå din computer. Her importerer du en fil, og AulaSync siger til, når skemaet er ændret.
 
 **Installation**
-- Windows 10 og 11 (64-bit): hent `AulaSync.exe` herunder, læg den i en fast mappe, fx *Dokumenter*, og dobbeltklik på den dér. Flyt den ikke bagefter, for AulaSync starter derfra, når du logger ind. Viser Windows "Windows beskyttede din pc", så vælg *Flere oplysninger* › *Kør alligevel*. Du kan også bruge `winget install rpaasch.AulaSync` og første gang starte den ved at skrive `AulaSync` i et nyt vindue (Terminal eller PowerShell). En ny udgave kommer først i winget, når Microsoft har godkendt den.
+- Windows 10 og 11 (64-bit): hent `AulaSync-Setup.exe` herunder, og åbn den. Viser Windows "Windows beskyttede din pc", så vælg *Flere oplysninger* › *Kør alligevel*. Du kan også bruge `winget install rpaasch.AulaSync`; en ny udgave kommer først i winget, når Microsoft har godkendt den. `AulaSync.exe` er udgaven uden installation, til ældre installationer fra winget og til IT.
 - Mac (macOS 15 eller nyere): hent `-arm64.dmg` til Mac med Apple-chip (M1 og nyere) eller `-x64.dmg` til Mac med Intel, og træk AulaSync over i Programmer. Appen er ikke signeret af Apple, så første gang skal du give lov: åbn AulaSync fra Programmer (ikke fra `.dmg`-filen), og klik *Udført*, når macOS siger, at appen ikke blev åbnet. Åbn så *Systemindstillinger › Anonymitet og sikkerhed*, klik *Åbn alligevel* ved AulaSync, og bekræft med adgangskoden til din Mac. Når Kalender spørger, så vælg Placering: *På min Mac*.
 
 AulaSync er ikke tilknyttet eller godkendt af Aula, KOMBIT, Netcompany eller KMD.

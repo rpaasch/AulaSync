@@ -244,7 +244,7 @@ public class IcsServerTests : IDisposable
         var port = FreePort();
         using var server = new IcsServer(_dir.Path, new FileLog(_dir.File("log.txt")), port);
         var fetched = new List<string>();
-        server.Fetched += name => { lock (fetched) fetched.Add(name); };
+        server.Fetched += (name, _) => { lock (fetched) fetched.Add(name); };
         Assert.True(server.TryStart());
         using var http = new HttpClient();
 
@@ -260,6 +260,24 @@ public class IcsServerTests : IDisposable
         await http.SendAsync(foreign);
 
         lock (fetched) Assert.Equal(["klasse-88231.ics", "lokale-412.ics", "lokale-412.ics"], fetched);
+    }
+
+    // Med hentningen følger programmets User-Agent, så AulaSync kan se, hvilket program der henter (FetchWatch).
+    [Fact]
+    public async Task Fetch_reports_the_user_agent()
+    {
+        var port = FreePort();
+        using var server = new IcsServer(_dir.Path, new FileLog(_dir.File("log.txt")), port);
+        var agents = new List<string>();
+        server.Fetched += (_, agent) => { lock (agents) agents.Add(agent); };
+        Assert.True(server.TryStart());
+        File.WriteAllText(_dir.File("123456-7A-klasse-88231.ics"), "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n");
+        using var http = new HttpClient();
+        var request = new HttpRequestMessage(HttpMethod.Get, $"http://localhost:{port}/klasse-88231.ics");
+        request.Headers.TryAddWithoutValidation("User-Agent", "Microsoft Office/16.0 (Windows NT 10.0; Microsoft Outlook 16.0; Pro)");
+        await http.SendAsync(request);
+        await http.GetAsync($"http://localhost:{port}/klasse-88231.ics");
+        lock (agents) Assert.Equal(["Microsoft Office/16.0 (Windows NT 10.0; Microsoft Outlook 16.0; Pro)", ""], agents);
     }
 
     [Fact]

@@ -50,15 +50,17 @@ public static class IcsWriter
         if (options.StatusZone is { } zone)
         {
             // Mandag kl. 5.45-6.00 i denne uge (lørdag og søndag: den kommende), så den står samme sted hver uge. Samme UID
-            // hver gang, så kalenderen flytter den i stedet for at lave en ny. Privat og uden at optage tid.
+            // hver gang, så kalenderen flytter den i stedet for at lave en ny. Privat og uden at optage tid. Titel og
+            // beskrivelse er det samme, fx "Opd. 091026@07:30".
             var start = StatusStart(now, zone);
+            var text = IcsText.Escape(EventFormatter.StatusText(now, zone));
             Line("BEGIN:VEVENT");
             Line($"UID:{StatusUidPrefix}{schedule.Kind.Slug()}-{schedule.Id}@aulasync");
             Line($"DTSTAMP:{stamp}");
             Line($"DTSTART:{Utc(start)}");
             Line($"DTEND:{Utc(start.AddMinutes(15))}");
-            Line($"SUMMARY:{IcsText.Escape(EventFormatter.StatusSummary(now, zone))}");
-            Line($"DESCRIPTION:{IcsText.Escape(EventFormatter.StatusDescription(now, zone))}");
+            Line($"SUMMARY:{text}");
+            Line($"DESCRIPTION:{text}");
             Line("CLASS:PRIVATE");
             Line("TRANSP:TRANSPARENT");
             Line("END:VEVENT");

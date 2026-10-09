@@ -1,33 +1,35 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Media;
-using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 
 namespace AulaSync.App;
 
 public enum TrayState { Normal, Updating, Attention }
 
-// Ikonet tegnes i kode: et lille kalenderblad. Sort på gennemsigtig baggrund på Mac (skabelon-ikon),
-// i accentfarve på Windows. "Opdaterer" = prik midt i bladet, "kræver handling" = prik i hjørnet.
+// Ikonet i systembakken (Windows) og menulinjen (Mac), tegnet af packaging/icon/make-icons.py. Windows: AulaSyncs eget
+// ikon i alle størrelser fra 16 til 64 px, så Windows vælger den rigtige ved hver skalering (et enkelt billede blev
+// skaleret ned og sløret). Mac: samme kalenderblad i sort som skabelon-ikon, som macOS farver efter menulinjen.
+// "Opdaterer" = prik midt i bladet, "kræver handling" = prik i hjørnet.
 public static class TrayIconImage
 {
-    public static Bitmap Render(TrayState state, bool template)
+    static readonly Dictionary<(TrayState, bool), WindowIcon> Cache = new();
+
+    public static Uri Uri(TrayState state, bool template)
     {
-        var bitmap = new RenderTargetBitmap(new PixelSize(64, 64), new Vector(96, 96));
-        using (var ctx = bitmap.CreateDrawingContext())
-        {
-            IBrush ink = template ? Brushes.Black : new SolidColorBrush(Color.Parse("#2f6fde"));
-            var pen = new Pen(ink, 6);
-            ctx.DrawRectangle(null, pen, new RoundedRect(new Rect(8, 12, 46, 44), 8));
-            ctx.DrawLine(pen, new Point(8, 26), new Point(54, 26));
-            ctx.DrawLine(pen, new Point(21, 6), new Point(21, 16));
-            ctx.DrawLine(pen, new Point(41, 6), new Point(41, 16));
-            if (state == TrayState.Updating) ctx.DrawEllipse(ink, null, new Point(31, 41), 6, 6);
-            if (state == TrayState.Attention)
-                ctx.DrawEllipse(template ? Brushes.Black : new SolidColorBrush(Color.Parse("#b26a00")), null, new Point(52, 12), 11, 11);
-        }
-        return bitmap;
+        var suffix = state switch { TrayState.Updating => "-updating", TrayState.Attention => "-attention", _ => "" };
+        return new($"avares://AulaSync/Assets/Tray/{(template ? "menubar" : "tray")}{suffix}.{(template ? "png" : "ico")}");
     }
 
-    public static WindowIcon Create(TrayState state, bool template) => new(Render(state, template));
+    // Ikonet skiftes ved hver statusændring; hvert af de seks læses kun én gang.
+    public static WindowIcon Create(TrayState state, bool template)
+    {
+        lock (Cache)
+        {
+            if (!Cache.TryGetValue((state, template), out var icon))
+            {
+                using var stream = AssetLoader.Open(Uri(state, template));
+                Cache[(state, template)] = icon = new WindowIcon(stream);
+            }
+            return icon;
+        }
+    }
 }

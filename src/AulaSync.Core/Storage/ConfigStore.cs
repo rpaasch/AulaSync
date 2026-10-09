@@ -7,7 +7,7 @@ public enum CalendarApp { AppleCalendar, OutlookClassic, OutlookImport, Other }
 
 // Port: kalender-serverens port for denne bruger; den vælges ved første start (UserPort).
 // UpdateMinutes: hvor tit skemaerne hentes fra Aula (Indstillinger); null eller en ukendt værdi er hver 4. time.
-// StatusEvent: en privat aftale mandag kl. 5.45 i hver kalender viser, hvornår skemaet sidst blev hentet.
+// StatusEvent: en privat aftale mandag kl. 5.45 i hver kalender viser, hvornår skemaet i kalenderen blev hentet (IcsWriter).
 public sealed record AppConfig(CalendarApp? CalendarApp = null, bool FirstRunDone = false, int? Port = null,
     int? UpdateMinutes = null, bool StatusEvent = false)
 {

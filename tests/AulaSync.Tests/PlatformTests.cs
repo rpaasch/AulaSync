@@ -52,6 +52,22 @@ public class PlatformTests
         await WaitUntil(() => shown == 2);
     }
 
+    // Installationsprogrammet beder den kørende AulaSync om at afslutte (AulaSync.exe --quit).
+    [Fact]
+    public async Task Quit_signal_reaches_the_running_instance_and_show_still_works()
+    {
+        var name = "AulaSync-test-" + Guid.NewGuid().ToString("N")[..8];
+        int shown = 0, quit = 0;
+        using var channel = new InstanceChannel(name);
+        channel.Listen(() => Interlocked.Increment(ref shown), () => Interlocked.Increment(ref quit));
+
+        Assert.True(await InstanceChannel.SignalQuitAsync(name, TimeSpan.FromSeconds(2)));
+        await WaitUntil(() => quit == 1);
+        Assert.True(await InstanceChannel.SignalShowAsync(name, TimeSpan.FromSeconds(2)));
+        await WaitUntil(() => shown == 1);
+        Assert.Equal(1, quit);
+    }
+
     [Fact]
     public async Task Signal_without_running_instance_returns_false() =>
         Assert.False(await InstanceChannel.SignalShowAsync("AulaSync-ingen-" + Guid.NewGuid().ToString("N")[..8], TimeSpan.FromMilliseconds(300)));

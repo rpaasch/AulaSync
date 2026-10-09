@@ -43,7 +43,7 @@
         <StackPanel VerticalAlignment="Center">
           <TextBlock Text="Vis opdateringstid i kalenderen" TextWrapping="Wrap" />
           <TextBlock Classes="sub" TextWrapping="Wrap"
-                     Text="En privat aftale mandag kl. 5.45 viser, hvornår skemaet sidst blev hentet. Ændringen kommer med ved næste opdatering." />
+                     Text="En privat aftale mandag kl. 5.45 viser, hvornår skemaet i kalenderen blev hentet fra Aula, fx &quot;Opd. 091026@07:30&quot;. Ændringen kommer med ved næste opdatering." />
         </StackPanel>
       </DockPanel>
       <Separator />
@@ -81,6 +81,15 @@
         <StackPanel>
           <TextBlock Text="Fejlfinding" />
           <TextBlock Classes="sub" Text="{Binding VersionText}" />
+        </StackPanel>
+      </DockPanel>
+      <Separator />
+      <DockPanel Classes="r">
+        <Button DockPanel.Dock="Right" Classes="ghost" Content="Afinstallér AulaSync…" Command="{Binding UninstallCommand}"
+                VerticalAlignment="Center" />
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="Afinstallér" />
+          <TextBlock Classes="sub" TextWrapping="Wrap" Text="Fjerner AulaSync og alt, den har gemt på computeren." />
         </StackPanel>
       </DockPanel>
     </StackPanel>

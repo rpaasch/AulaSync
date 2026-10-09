@@ -12,6 +12,7 @@ public interface IDialogs
     Task<bool> ShowImportGuideAsync(ScheduleRef schedule);   // true = brugeren klikkede Færdig
     Task ShowOutlookFallbackAsync(ScheduleRef schedule);
     Task<bool> ConfirmLogoutAsync();
+    Task<bool> ConfirmUninstallAsync();
 }
 
 // Hovedknappen og "…"-menuen pr. skema. Implementeres af MainActions (Task 16).

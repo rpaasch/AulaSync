@@ -21,9 +21,9 @@ Vælg medarbejdere, klasser og lokaler. Hvert skema bliver sin egen kalender i d
 
 ### Windows 10 og 11 (64-bit)
 
-Hent `AulaSync.exe` fra [den nyeste udgave](https://github.com/rpaasch/AulaSync/releases/latest), læg den i en fast mappe, fx **Dokumenter**, og dobbeltklik på den. Flyt den ikke bagefter, for AulaSync starter derfra, når du logger ind. Det kræver ingen installation og ingen administratorrettigheder. Når AulaSync har kørt første gang, ligger den i Start-menuen.
+Hent [AulaSync-Setup.exe](https://github.com/rpaasch/AulaSync/releases/latest/download/AulaSync-Setup.exe), og åbn den. Klik **Installer**, og lad **Start AulaSync** være markeret, når du klikker **Færdig**. AulaSync installeres kun for dig, i `%LOCALAPPDATA%\Programs\AulaSync`, og kræver ingen administratorrettigheder. Bagefter ligger AulaSync i Start-menuen.
 
-Programmet er ikke signeret: viser Windows "Windows beskyttede din pc", så vælg **Flere oplysninger** › **Kør alligevel**. Gør det kun med en `AulaSync.exe`, du selv har hentet fra udgivelsessiden. Mangler **Kør alligevel**, eller siger Windows, at programmet er blokeret, har computerens administrator lukket for programmer, der ikke er godkendt. Så spørg skolens IT.
+Programmet er ikke signeret: viser Windows "Windows beskyttede din pc", så vælg **Flere oplysninger** › **Kør alligevel**. Gør det kun med en `AulaSync-Setup.exe`, du selv har hentet fra udgivelsessiden. Mangler **Kør alligevel**, eller siger Windows, at programmet er blokeret, har computerens administrator lukket for programmer, der ikke er godkendt. Så spørg skolens IT.
 
 Med winget: højreklik på Start-knappen, vælg **Terminal** (på Windows 10: **Windows PowerShell**), og skriv:
 
@@ -31,7 +31,11 @@ Med winget: højreklik på Start-knappen, vælg **Terminal** (på Windows 10: **
 winget install rpaasch.AulaSync
 ```
 
-winget laver ingen genvej i Start-menuen, så første gang starter du AulaSync ved at åbne et nyt vindue på samme måde og skrive `AulaSync`. Derefter ligger AulaSync i Start-menuen. En ny udgave kommer først i winget, når Microsoft har godkendt den.
+AulaSync installeres, lægges i Start-menuen og åbner. En ny udgave kommer først i winget, når Microsoft har godkendt den.
+
+**Ny udgave:** Hent og åbn AulaSync-Setup.exe igen. Kører AulaSync, lukkes den og startes igen bagefter. Med winget: højreklik på AulaSync-ikonet i systembakken ved uret, vælg **Afslut AulaSync**, skriv `winget upgrade rpaasch.AulaSync` i Terminal, og start AulaSync fra Start-menuen bagefter.
+
+**Har du en ældre udgave:** Har du lagt `AulaSync.exe` i en mappe selv, så installér AulaSync-Setup.exe. Start ved login flytter med til den installerede AulaSync, og bagefter kan du slette den gamle `AulaSync.exe`. Har du AulaSync fra winget fra før 3.2, så opdatér med winget som beskrevet ovenfor. winget kan ikke skifte til installationsprogrammet, så du beholder udgaven uden installation; den ligger også i Start-menuen.
 
 Login bruger Microsoft Edge WebView2 Runtime, som følger med Windows 11 og findes på de fleste computere med Windows 10. Mangler den, siger AulaSync til.
 
@@ -71,7 +75,7 @@ AulaSync gemmer alt på din egen computer. Din adgangskode gemmer AulaSync ikke.
 
 Kalender-serveren tager kun imod forbindelser fra din egen computer (`127.0.0.1` og `::1`) og udleverer kun skemafilerne. En hjemmeside i din browser kan ikke læse dem. Serveren har ingen adgangskode, så andre programmer og andre brugere, der er logget ind på samme computer, kan hente skemaerne. Porten vælges ved første start: 9876 eller den første ledige op til 9899, så flere brugere på samme computer som regel kan køre AulaSync samtidig. Porten reserveres dog ikke: kørte en anden brugers AulaSync ikke, da du startede AulaSync første gang, kan I få samme port, og så kan kun én af jer ad gangen køre kalender-serveren.
 
-**Log ud…** i Indstillinger glemmer dit login og sletter dine valgte skemaer, og første start vises igen. Kalenderfilerne bliver liggende, så kalenderne viser stadig de seneste skemaer, men de bliver ikke opdateret, før du vælger skemaerne igen. Vil du fjerne alt, så slå **Start AulaSync, når jeg logger ind** fra i Indstillinger, vælg **Afslut AulaSync**, slet mappen ovenfor, og slet AulaSync-kalenderne i dit kalenderprogram. På Windows sletter du også `AulaSync.exe` (eller skriver `winget uninstall rpaasch.AulaSync`) og genvejen *AulaSync* i mappen `%APPDATA%\Microsoft\Windows\Start Menu\Programs` (skriv adressen i Stifinder). På Mac ligger dit login til Aula i AulaSyncs WebKit-data uden for mappen, normalt i `~/Library/WebKit/dk.rpaasch.aulasync`; slet også den mappe.
+**Log ud…** i Indstillinger glemmer dit login og sletter dine valgte skemaer, og første start vises igen. Kalenderfilerne bliver liggende, så kalenderne viser stadig de seneste skemaer, men de bliver ikke opdateret, før du vælger skemaerne igen. **Afinstallér AulaSync…** i Indstillinger fjerner alt, AulaSync har gemt på computeren: programmet, start ved login, dit login, dine indstillinger, loggen og kalenderfilerne. På Windows også genvejen i Start-menuen og mappen fra AulaSync 2 (`%USERPROFILE%\.aulasync`); på Mac også AulaSyncs WebKit-data med login og cache, og AulaSync flyttes til papirkurven. Det samme sker, når du afinstallerer AulaSync på Windows fra **Indstillinger › Apps** (**Installerede apps**, på Windows 10 **Apps og funktioner**) eller med `winget uninstall rpaasch.AulaSync`. Har du AulaSync fra winget fra før 3.2, så brug **Afinstallér AulaSync…**; **Indstillinger › Apps** og `winget uninstall` sletter dér kun programmet. Knappen findes fra AulaSync 3.2. Slet bagefter AulaSync-kalenderne i dit kalenderprogram; dem kan AulaSync ikke slette.
 
 Importerer du et skema i ny Outlook, Outlook til Mac eller Outlook på nettet, ligger det bagefter også i din Outlook-konto hos Microsoft.
 
@@ -84,7 +88,7 @@ dotnet run --project src/AulaSync.App
 dotnet test AulaSync.slnx
 ```
 
-En udgivelse laves af GitHub Actions (`.github/workflows/release.yml`), når et versionsmærke som `v3.0.0` pushes: Windows-exe, Mac-dmg'er og winget-manifester (se `packaging/`).
+En udgivelse laves af GitHub Actions (`.github/workflows/release.yml`), når et versionsmærke som `v3.2.0` pushes: installationsprogrammet til Windows (`AulaSync-Setup.exe`, Inno Setup), den løse `AulaSync.exe` (til den portable udgave i winget og til IT), Mac-dmg'er og winget-manifester (se `packaging/`). Ikonet tegnes af `packaging/icon/make-icons.py`.
 
 ## Ansvarsfraskrivelse
 

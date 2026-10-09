@@ -142,7 +142,8 @@ public class IcsWriterTests
         return ics[start..(ics.IndexOf("END:VEVENT\r\n", start, StringComparison.Ordinal) + 12)];
     }
 
-    // Slået til i Indstillinger: en privat begivenhed mandag kl. 5.45-6.00 viser, hvornår skemaet blev hentet.
+    // Slået til i Indstillinger: en privat begivenhed mandag kl. 5.45-6.00 viser, hvornår skemaet blev hentet, med samme
+    // tekst i titel og beskrivelse.
     [Fact]
     public void Status_event_is_private_on_monday_morning()
     {
@@ -153,26 +154,27 @@ public class IcsWriterTests
             "DTSTAMP:20261007T123200Z",
             "DTSTART:20261005T034500Z",
             "DTEND:20261005T040000Z",
-            "SUMMARY:AulaSync opdateret ons. 7. okt. 14:32",
-            @"DESCRIPTION:AulaSync hentede skemaet fra Aula onsdag 7. oktober 2026 kl. 14:32.\nDenne private aftale kan slås fra i AulaSync under Indstillinger.",
+            "SUMMARY:Opd. 071026@14:32",
+            "DESCRIPTION:Opd. 071026@14:32",
             "CLASS:PRIVATE",
             "TRANSP:TRANSPARENT",
             "END:VEVENT") + "\r\n", Unfold(status));
     }
 
-    // Lørdag og søndag ligger den i den kommende uge; vintertid regnes om til UTC.
+    // Lørdag og søndag ligger den i den kommende uge; vintertid regnes om til UTC; tidspunktet er dansk tid.
     [Theory]
-    [InlineData("2026-10-05T05:00:00+02:00", "20261005T034500Z", "man. 5. okt. 05:00")]
-    [InlineData("2026-10-09T23:59:00+02:00", "20261005T034500Z", "fre. 9. okt. 23:59")]
-    [InlineData("2026-10-10T08:00:00+02:00", "20261012T034500Z", "lør. 10. okt. 08:00")]
-    [InlineData("2026-10-25T12:00:00+01:00", "20261026T044500Z", "søn. 25. okt. 12:00")]
-    [InlineData("2026-11-03T09:15:00+01:00", "20261102T044500Z", "tirs. 3. nov. 09:15")]
-    [InlineData("2026-11-05T09:15:00+01:00", "20261102T044500Z", "tors. 5. nov. 09:15")]
-    public void Status_event_week_and_time_zone(string now, string start, string stamp)
+    [InlineData("2026-10-05T05:00:00+02:00", "20261005T034500Z", "Opd. 051026@05:00")]
+    [InlineData("2026-10-09T23:59:00+02:00", "20261005T034500Z", "Opd. 091026@23:59")]
+    [InlineData("2026-10-09T22:30:00Z", "20261012T034500Z", "Opd. 101026@00:30")]
+    [InlineData("2026-10-10T08:00:00+02:00", "20261012T034500Z", "Opd. 101026@08:00")]
+    [InlineData("2026-10-25T12:00:00+01:00", "20261026T044500Z", "Opd. 251026@12:00")]
+    [InlineData("2026-11-03T09:15:00+01:00", "20261102T044500Z", "Opd. 031126@09:15")]
+    public void Status_event_week_and_time_zone(string now, string start, string text)
     {
         var status = Unfold(StatusEvent(DateTimeOffset.Parse(now)));
         Assert.Contains($"DTSTART:{start}\r\n", status);
-        Assert.Contains($"SUMMARY:AulaSync opdateret {stamp}\r\n", status);
+        Assert.Contains($"SUMMARY:{text}\r\n", status);
+        Assert.Contains($"DESCRIPTION:{text}\r\n", status);
     }
 
     [Fact]

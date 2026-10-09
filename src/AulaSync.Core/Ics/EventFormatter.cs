@@ -3,10 +3,6 @@ namespace AulaSync.Core;
 public static class EventFormatter
 {
     internal static readonly string[] Months = ["jan.", "feb.", "mar.", "apr.", "maj", "jun.", "jul.", "aug.", "sep.", "okt.", "nov.", "dec."];
-    static readonly string[] LongMonths = ["januar", "februar", "marts", "april", "maj", "juni", "juli", "august", "september", "oktober", "november", "december"];
-    // DayOfWeek-rækkefølge: søndag først.
-    static readonly string[] Weekdays = ["søn.", "man.", "tirs.", "ons.", "tors.", "fre.", "lør."];
-    static readonly string[] LongWeekdays = ["søndag", "mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag"];
 
     public static string Summary(ScheduleKind kind, AulaEvent e)
     {
@@ -36,20 +32,8 @@ public static class EventFormatter
 
     static string Format(Participant p) => p.Initials == "" ? p.Name : $"{p.Name} ({p.Initials})";
 
-    // Statusbegivenheden (IcsWriter, Indstillinger › Vis opdateringstid i kalenderen): titel og beskrivelse.
-    public static string StatusSummary(DateTimeOffset at, TimeZoneInfo tz)
-    {
-        var local = TimeZoneInfo.ConvertTime(at, tz);
-        return $"AulaSync opdateret {Weekdays[(int)local.DayOfWeek]} {local.Day}. {Months[local.Month - 1]} {Time(local)}";
-    }
-
-    public static string StatusDescription(DateTimeOffset at, TimeZoneInfo tz)
-    {
-        var local = TimeZoneInfo.ConvertTime(at, tz);
-        return $"AulaSync hentede skemaet fra Aula {LongWeekdays[(int)local.DayOfWeek]} {local.Day}. {LongMonths[local.Month - 1]} {local.Year} kl. {Time(local)}.\n"
-            + "Denne private aftale kan slås fra i AulaSync under Indstillinger.";
-    }
-
-    // InvariantCulture: dansk kultur kan bruge "." som tidsseparator.
-    static string Time(DateTimeOffset local) => local.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+    // Statusbegivenheden (IcsWriter, Indstillinger › Vis opdateringstid i kalenderen): titel og beskrivelse er det samme,
+    // tidspunktet for hentningen, fx "Opd. 091026@07:30" (dag, måned, år og klokkeslæt i lokal tid).
+    public static string StatusText(DateTimeOffset at, TimeZoneInfo tz) =>
+        "Opd. " + TimeZoneInfo.ConvertTime(at, tz).ToString("ddMMyy'@'HH':'mm", System.Globalization.CultureInfo.InvariantCulture);
 }
