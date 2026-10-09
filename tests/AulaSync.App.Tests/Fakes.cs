@@ -27,6 +27,7 @@ sealed class FakeAutostart(bool enabled = false) : IAutostart
 {
     public bool IsEnabled { get; private set; } = enabled;
     public void SetEnabled(bool enabled) => IsEnabled = enabled;
+    public bool Retarget() => false;
 }
 
 // Et komplet sæt Core-tjenester i en midlertidig mappe.
@@ -73,6 +74,9 @@ sealed class FakeDialogs : IDialogs
     public Task<bool> ShowImportGuideAsync(ScheduleRef schedule) { ImportGuides.Add(schedule); return Task.FromResult(ImportGuideResult); }
     public Task ShowOutlookFallbackAsync(ScheduleRef schedule) { Fallbacks.Add(schedule); return Task.CompletedTask; }
     public Task<bool> ConfirmLogoutAsync() => Task.FromResult(LogoutResult);
+    public int UninstallConfirms;
+    public bool UninstallResult { get; set; } = true;
+    public Task<bool> ConfirmUninstallAsync() { UninstallConfirms++; return Task.FromResult(UninstallResult); }
 }
 
 sealed class FakeActions : IMainActions

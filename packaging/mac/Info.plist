@@ -11,6 +11,9 @@
   <string>AulaSync</string>
   <key>CFBundleExecutable</key>
   <string>AulaSync</string>
+  <!-- Contents/Resources/AulaSync.icns (packaging/icon) -->
+  <key>CFBundleIconFile</key>
+  <string>AulaSync</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

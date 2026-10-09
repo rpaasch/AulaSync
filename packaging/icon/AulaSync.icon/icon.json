@@ -1,0 +1,28 @@
+{
+  "fill": {
+    "automatic-gradient": "srgb:0.18431,0.43529,0.87059,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "name": "kalender",
+          "image-name": "kalender.png",
+          "glass": false
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      },
+      "specular": false
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

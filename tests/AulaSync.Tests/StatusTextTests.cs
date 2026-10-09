@@ -125,6 +125,41 @@ public class RowPresenterTests
         Assert.Equal(new RowButtons(null, "Importeret i dag", null, "Importér igen…"),
             Buttons(CalendarApp.OutlookImport, new(SevenA, ImportedAt: At, ImportHash: "h"), At.AddHours(9)));
 
+    // Henter kalenderprogrammet ikke skemaet længere (FetchWatch), kommer knappen igen med en note; har det ikke hentet
+    // noget i lang tid, kun noten.
+    [Fact]
+    public void Not_fetched_any_more()
+    {
+        var fetched = new Subscription(SevenA, AddedAt: At, FetchedAt: At);
+        var missing = new FetchCheck(FetchHealth.Missing, "Outlook", At, null);
+        Assert.Equal(new RowButtons("Tilføj til Outlook", null, "Ikke hentet af Outlook siden 3. okt.", "Tilføj igen"),
+            RowPresenter.Buttons(CalendarApp.OutlookClassic, fetched, false, Later, Copenhagen, missing));
+        Assert.Equal(new RowButtons(null, null, "Ikke hentet af Kalender siden 3. okt.", "Tilføj igen"),
+            RowPresenter.Buttons(CalendarApp.AppleCalendar, fetched, false, Later, Copenhagen, new(FetchHealth.Quiet, "Kalender", At, null)));
+        // Kun Outlook henter alle kalendere lige tit; andre programmer får kun mærket.
+        Assert.Equal(new RowButtons(null, null, "Ikke hentet siden i går kl. 14:00", "Tilføj igen"),
+            RowPresenter.Buttons(CalendarApp.Other, fetched, false, At.AddDays(1), Copenhagen, missing with { Program = null }));
+        Assert.Equal(new RowButtons(null, null, "Ikke hentet af Kalender siden 3. okt.", "Tilføj igen"),
+            RowPresenter.Buttons(CalendarApp.AppleCalendar, fetched, false, Later, Copenhagen, missing with { Program = "Kalender" }));
+        Assert.Equal(new RowButtons("Tilføj til Outlook", null, "Ikke hentet af Outlook siden kl. 14:00", "Tilføj igen"),
+            RowPresenter.Buttons(CalendarApp.OutlookClassic, fetched, false, At.AddHours(7), Copenhagen, missing));
+        Assert.Equal(new RowButtons(null, "✓ Tilføjet", null, "Tilføj igen"),
+            RowPresenter.Buttons(CalendarApp.OutlookClassic, fetched, false, Later, Copenhagen, new(FetchHealth.Ok, "Outlook", At, null)));
+        // Import: hentning betyder intet.
+        Assert.Equal(new RowButtons("Importér…", null, null, "Importér igen…"),
+            RowPresenter.Buttons(CalendarApp.OutlookImport, fetched, false, Later, Copenhagen, missing));
+    }
+
+    [Fact]
+    public void Changes_when_fetch_check_says_so()
+    {
+        var fetched = new Subscription(SevenA, FetchedAt: At);
+        var check = new FetchCheck(FetchHealth.Ok, "Outlook", At, At.AddDays(7));
+        Assert.Equal(At.AddDays(7), RowPresenter.ChangesAt(CalendarApp.OutlookClassic, fetched, At, check));
+        Assert.Null(RowPresenter.ChangesAt(CalendarApp.OutlookClassic, fetched, At));
+        Assert.Null(RowPresenter.ChangesAt(CalendarApp.OutlookImport, fetched, At, check));
+    }
+
     // Ved "Kopiér adresse" ved AulaSync ikke, hvornår adressen sættes ind, så der er ingen frist; men en hentning tæller.
     [Fact]
     public void Copy_address_before_and_after_click()

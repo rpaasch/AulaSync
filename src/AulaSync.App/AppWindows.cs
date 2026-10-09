@@ -100,7 +100,7 @@ public sealed class AppWindows(AppHost host) : IDialogs
         {
             var vm = new SettingsViewModel(host.Config, host.Autostart, host.Session, this, host.Platform, host.Paths,
                 host.SignOutAsync, () => { MainViewModel.Reload(); host.UpdateTray(); }, // prikken følger kalenderprogrammet
-                host.Scheduler.Reschedule);
+                host.Scheduler.Reschedule, host.Uninstaller);
             _settings = new SettingsWindow(vm);
             WindowChrome.Apply(_settings);
             WindowFit.CapToScreen(_settings);
@@ -118,6 +118,7 @@ public sealed class AppWindows(AppHost host) : IDialogs
         ShowModalAsync<object?>(new OutlookFallbackWindow(new OutlookFallbackViewModel(schedule, host.Config.Load().ServerPort, host.Platform, host.Time)));
 
     public Task<bool> ConfirmLogoutAsync() => ShowModalAsync<bool>(new ConfirmLogoutWindow());
+    public Task<bool> ConfirmUninstallAsync() => ShowModalAsync<bool>(new ConfirmUninstallWindow());
 
     // Log ud: luk alt; første start vises igen, fra begyndelsen (også hvis den var vist igen fra Indstillinger).
     public void CloseAll()

@@ -80,6 +80,33 @@ public class MainViewModelTests : IDisposable
         Assert.Equal("✓ Tilføjet", sevenA.DoneText);
     }
 
+    // Slettes en kalender i Outlook, henter Outlook stadig de andre skemaer, men ikke dette: rækken får en note og knappen
+    // igen. Hentes skemaet igen, står der "✓ Tilføjet".
+    [Fact]
+    public async Task Row_notices_when_outlook_stops_fetching_a_schedule()
+    {
+        const string outlook = "Microsoft Office/16.0 (Windows NT 10.0; Microsoft Outlook 16.0; Pro)";
+        _host.Config.Save(new AppConfig(CalendarApp.OutlookClassic, FirstRunDone: true));
+        await AddAsync(SevenA, Room);
+        var vm = Create(isMac: false);
+        await _host.Sync.MarkFetchedAsync(SevenA.FileName, outlook);
+        await _host.Sync.MarkFetchedAsync(Room.FileName, outlook);
+        var (sevenA, room) = (vm.Rows[0], vm.Rows[1]);
+        for (var i = 0; i < 12; i++) // 7A er slettet i Outlook; Outlook henter Lokale 53 hver halve time
+        {
+            _host.Time.Advance(TimeSpan.FromMinutes(30));
+            await _host.Sync.MarkFetchedAsync(Room.FileName, outlook);
+        }
+        Assert.Equal("Tilføj til Outlook", sevenA.PrimaryLabel);
+        Assert.Equal("Ikke hentet af Outlook siden kl. 14:00", sevenA.Note);
+        Assert.False(sevenA.HasDone);
+        Assert.Equal("✓ Tilføjet", room.DoneText);
+
+        await _host.Sync.MarkFetchedAsync(SevenA.FileName, outlook);
+        Assert.Equal("✓ Tilføjet", sevenA.DoneText);
+        Assert.False(sevenA.HasNote);
+    }
+
     [Fact]
     public async Task Failed_schedule_shows_error_and_no_main_button()
     {

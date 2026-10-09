@@ -40,8 +40,9 @@ public sealed partial class IcsServer : IDisposable
         _port = port;
     }
 
-    // Et program har hentet en kalenderfil (svaret var 200 eller 304); argumentet er navnet i adressen, fx "klasse-7.ics".
-    public event Action<string>? Fetched;
+    // Et program har hentet en kalenderfil (svaret var 200 eller 304): navnet i adressen, fx "klasse-7.ics", og programmets
+    // User-Agent ("" uden).
+    public event Action<string, string>? Fetched;
 
     public static string UrlFor(ScheduleRef schedule, int port) => $"http://localhost:{port}/{schedule.FileName}";
 
@@ -168,7 +169,7 @@ public sealed partial class IcsServer : IDisposable
                 var decision = path.StartsWith('/') ? Resolve(_calendarDir, path, method, since) : new(400, null, null);
                 if (decision.StatusCode != 304)
                     LogOnce($"{method} {decision.StatusCode} {path}", $"Kalender-server: {method} {Printable(path)} → {decision.StatusCode}{from}");
-                if (decision.StatusCode is 200 or 304) Fetched?.Invoke(NameOf(path));
+                if (decision.StatusCode is 200 or 304) Fetched?.Invoke(NameOf(path), agent);
                 await ReplyAsync(client, stream, decision.StatusCode, decision, method == "GET" ? decision.FilePath : null, timeout.Token);
             }
             catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or ObjectDisposedException)

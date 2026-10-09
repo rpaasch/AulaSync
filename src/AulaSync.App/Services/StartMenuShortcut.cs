@@ -23,16 +23,29 @@ public static class StartMenuShortcut
 
     // Startes AulaSync gennem winget's henvisning (Links\AulaSync.exe), peger genvejen på selve filen, så den er den samme,
     // uanset hvordan AulaSync blev startet. Kun ét led: det endelige mål kan på Windows komme tilbage som en forkert sti for
-    // filer på et netværksdrev. Findes målet ikke, bruges stien, AulaSync blev startet med.
+    // filer på et netværksdrev. Findes målet ikke, bruges stien, AulaSync blev startet med. Korte 8.3-navne foldes ud.
     public static string RealPath(string exePath)
     {
         try
         {
             var real = new FileInfo(exePath).ResolveLinkTarget(returnFinalTarget: false)?.FullName;
-            return real is not null && File.Exists(real) ? real : exePath;
+            return LongPath(real is not null && File.Exists(real) ? real : exePath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return exePath; }
     }
+
+    // Windows: korte 8.3-navne (fx C:\Users\ANNAEK~1\…) foldes ud til den lange sti, som genvejen og Windows selv bruger;
+    // ellers ville genvejen se ud til at pege på en anden fil. Uændret, hvis stien ikke findes, og uden for Windows.
+    internal static string LongPath(string path)
+    {
+        if (!OperatingSystem.IsWindows()) return path;
+        var buffer = new char[32768];
+        var length = GetLongPathName(path, buffer, (uint)buffer.Length);
+        return length > 0 && length < buffer.Length ? new string(buffer, 0, (int)length) : path;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetLongPathNameW")]
+    static extern uint GetLongPathName(string shortPath, [Out] char[] longPath, uint size);
 
     // true, hvis genvejen blev skrevet.
     [SupportedOSPlatform("windows")]
@@ -49,6 +62,18 @@ public static class StartMenuShortcut
             ((IPersistFile)link).Save(linkPath, true);
         }
         finally { Marshal.FinalReleaseComObject(link); }
+        return true;
+    }
+
+    // "Afinstallér AulaSync…": genvejen slettes, når den peger på denne AulaSync, er ødelagt eller peger på en fil, der ikke
+    // findes mere. En genvej til en anden AulaSync, der stadig findes, bliver. true, hvis den blev slettet.
+    [SupportedOSPlatform("windows")]
+    public static bool Remove(string linkPath, string exePath)
+    {
+        if (!File.Exists(linkPath)) return false;
+        var target = TryReadTarget(linkPath);
+        if (target is not null && !PointsTo(target, exePath) && File.Exists(target)) return false;
+        File.Delete(linkPath);
         return true;
     }
 

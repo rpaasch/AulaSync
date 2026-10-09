@@ -64,6 +64,8 @@ public sealed partial class MainViewModel : ObservableObject
         var now = _time.GetUtcNow();
         var app = CalendarChoice.Current(_config, _platform.IsMac);
         var subscriptions = _sync.Subscriptions;
+        // Kører kalender-serveren ikke, kan intet hentes; det siger banneret, så rækkerne siger intet om hentning.
+        FetchCheck? Fetch(Subscription s) => serverRunning ? _sync.CheckFetch(s) : null;
 
         var keys = subscriptions.Select(s => s.Key).ToHashSet();
         for (int i = Rows.Count - 1; i >= 0; i--)
@@ -78,10 +80,10 @@ public sealed partial class MainViewModel : ObservableObject
                 Rows.Insert(Math.Min(i, Rows.Count), row);
             }
             row.Update(StatusText.Row(s.Schedule, _sync.StateOf(s.Schedule), status.NextSync, _tz),
-                RowPresenter.Buttons(app, s, _sync.ChangedSinceImport(s), now, _tz));
+                RowPresenter.Buttons(app, s, _sync.ChangedSinceImport(s), now, _tz, Fetch(s)));
         }
         IsEmpty = Rows.Count == 0;
-        ScheduleRowChange(subscriptions.Select(s => RowPresenter.ChangesAt(app, s, now)).Min(), now);
+        ScheduleRowChange(subscriptions.Select(s => RowPresenter.ChangesAt(app, s, now, Fetch(s))).Min(), now);
 
         _banner = StatusText.Banner(status, serverRunning, _config.Load().ServerPort);
         BannerText = _banner?.Text;
@@ -95,13 +97,19 @@ public sealed partial class MainViewModel : ObservableObject
         IsError = level == StatusLevel.Error;
     }
 
-    // En række, der venter på kalenderprogrammet, skifter af sig selv efter RowPresenter.FetchWait; så læses der igen.
+    // En række, der venter på kalenderprogrammet, skifter af sig selv efter RowPresenter.FetchWait, og en række, der ikke er
+    // hentet længe, efter FetchWatch' frister; så læses der igen.
+    // Højst en dag ad gangen (en timer kan højst vente ca. 49 dage, og uret kan være stillet forkert), og efter hver gang
+    // sættes den igen, også hvis den kom lidt før tid.
     void ScheduleRowChange(DateTimeOffset? at, DateTimeOffset now)
     {
         if (at == _rowTimerAt) return;
         _rowTimer?.Dispose();
         _rowTimerAt = at;
-        _rowTimer = at is { } when ? _time.CreateTimer(_ => _ui(Reload), null, when - now, Timeout.InfiniteTimeSpan) : null;
+        var due = at is { } when ? TimeSpan.FromTicks(Math.Clamp((when - now).Ticks, 0, TimeSpan.TicksPerDay)) : (TimeSpan?)null;
+        _rowTimer = due is { } wait
+            ? _time.CreateTimer(_ => _ui(() => { _rowTimerAt = null; Reload(); }), null, wait, Timeout.InfiniteTimeSpan)
+            : null;
     }
 
     [RelayCommand] Task AddSchedule() => _dialogs.ShowAddScheduleAsync();

@@ -16,6 +16,7 @@ public class SettingsViewModelTests : IDisposable
     readonly FakePlatform _platform = new();
     readonly SessionController _session;
     int _signOuts, _appChanges, _intervalChanges;
+    readonly FakeUninstall _uninstall = new();
 
     public SettingsViewModelTests()
     {
@@ -26,7 +27,30 @@ public class SettingsViewModelTests : IDisposable
     public void Dispose() => _host.Dispose();
 
     SettingsViewModel Create() => new(_host.Config, _autostart, _session, _dialogs, _platform, _host.Paths,
-        () => { _signOuts++; return Task.CompletedTask; }, () => _appChanges++, () => _intervalChanges++);
+        () => { _signOuts++; return Task.CompletedTask; }, () => _appChanges++, () => _intervalChanges++, _uninstall);
+
+    // "Afinstallér AulaSync…" spørger først; Annullér gør intet. Installationsprogrammets afinstallation spørger selv.
+    [Fact]
+    public async Task Uninstall_asks_first()
+    {
+        var vm = Create();
+        _dialogs.UninstallResult = false;
+        await vm.UninstallCommand.ExecuteAsync(null);
+        Assert.Equal((1, 0), (_dialogs.UninstallConfirms, _uninstall.Starts));
+        _dialogs.UninstallResult = true;
+        await vm.UninstallCommand.ExecuteAsync(null);
+        Assert.Equal((2, 1), (_dialogs.UninstallConfirms, _uninstall.Starts));
+        _uninstall.AsksItself = true;
+        await vm.UninstallCommand.ExecuteAsync(null);
+        Assert.Equal((2, 2), (_dialogs.UninstallConfirms, _uninstall.Starts));
+    }
+
+    sealed class FakeUninstall : IUninstall
+    {
+        public int Starts;
+        public bool AsksItself { get; set; }
+        public void Start() => Starts++;
+    }
 
     Task SignInAsync() => _session.SignInAsync([new Cookie("PHPSESSID", "a", "/", ".aula.dk"), new Cookie("Csrfp-Token", "b", "/", "www.aula.dk")], default);
 
@@ -92,7 +116,7 @@ public class SettingsViewModelTests : IDisposable
         vm.OpenCalendarFolderCommand.Execute(null);
         vm.OpenLogCommand.Execute(null);
         Assert.Equal([_host.Paths.Calendars, _host.Paths.Log], _platform.Opened);
-        Assert.Equal("Version 3.1.1", vm.VersionText);
+        Assert.Equal("Version 3.2.0", vm.VersionText);
     }
 
     // Hvor tit skemaerne hentes fra Aula: standard hver 4. time. Et nyt valg gemmes, og planen regnes om med det samme.
@@ -149,7 +173,7 @@ public class SettingsViewModelTests : IDisposable
         Assert.Contains("Start AulaSync, når jeg logger ind", texts);
         Assert.Contains("Hjælp", texts);
         Assert.Contains("Fejlfinding", texts);
-        Assert.Contains("Version 3.1.1", texts);
+        Assert.Contains("Version 3.2.0", texts);
         var buttons = window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).ToList();
         Assert.Contains("Vejledning", buttons);
         Assert.Contains("Kom i gang igen…", buttons);

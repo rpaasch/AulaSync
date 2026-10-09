@@ -11,7 +11,8 @@ public sealed record IntervalOption(int Minutes, string Label)
     public override string ToString() => Label;
 }
 
-// Indstillinger (spec §3.2): kalenderprogram, opdatering, start ved login, konto med Log ud…, hjælp, fejlfinding og version.
+// Indstillinger (spec §3.2): kalenderprogram, opdatering, start ved login, konto med Log ud…, hjælp, fejlfinding, version og
+// Afinstallér AulaSync….
 public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
 {
     public const string GuideUrl = "https://github.com/rpaasch/AulaSync/blob/master/docs/vejledning.md";
@@ -25,10 +26,12 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
     readonly Func<Task> _signOut;
     readonly Action _calendarAppChanged;
     readonly Action _intervalChanged;
+    readonly IUninstall _uninstall;
 
-    // intervalChanged: baggrundsplanen regner næste opdatering om (BackgroundScheduler.Reschedule).
+    // intervalChanged: baggrundsplanen regner næste opdatering om (BackgroundScheduler.Reschedule). uninstall:
+    // Afinstallér AulaSync… (UninstallLauncher).
     public SettingsViewModel(ConfigStore config, IAutostart autostart, SessionController session, IDialogs dialogs, IPlatform platform,
-        AppPaths paths, Func<Task> signOut, Action calendarAppChanged, Action intervalChanged)
+        AppPaths paths, Func<Task> signOut, Action calendarAppChanged, Action intervalChanged, IUninstall uninstall)
     {
         _config = config;
         _autostart = autostart;
@@ -39,6 +42,7 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
         _signOut = signOut;
         _calendarAppChanged = calendarAppChanged;
         _intervalChanged = intervalChanged;
+        _uninstall = uninstall;
         var saved = config.Load();
         var chosen = saved.CalendarApp;
         Cards = CalendarApps.All.Select(a => new CalendarCardViewModel(a, SelectCard) { IsSelected = a == chosen }).ToList();
@@ -113,4 +117,11 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
     }
 
     [RelayCommand] void OpenLog() => _platform.Open(_paths.Log);
+
+    // Installationsprogrammets afinstallation spørger selv; ellers spørger AulaSync først.
+    [RelayCommand]
+    async Task Uninstall()
+    {
+        if (_uninstall.AsksItself || await _dialogs.ConfirmUninstallAsync()) _uninstall.Start();
+    }
 }

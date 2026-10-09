@@ -36,7 +36,7 @@ public sealed class AppHost
         Session = new SessionController(Sync, Log);
         Browser = new BrowserProfile(paths, OperatingSystem.IsMacOS());
         Platform = new DesktopPlatform(Log);
-        Autostart = AutostartFactory.ForCurrentPlatform(Environment.ProcessPath ?? "AulaSync");
+        Autostart = AutostartFactory.ForCurrentPlatform(ExecutablePath);
         Windows = new AppWindows(this);
         Actions = new MainActions(Sync, Config, Platform, Windows);
         Notifier = new NotificationBox(Platform, Log, Time);
@@ -44,7 +44,13 @@ public sealed class AppHost
         Relogin = new Relogin(ct => SilentLogin.RunAsync(Browser, Session, ct), Notifier, Log, Time,
             SilentReloginSupported && !BrowserProfile.WebView2Missing);
         ImportReminder = new ImportReminder(Sync, Config, Platform, Notifier, () => Windows.ShowMain(), a => Dispatcher.UIThread.Post(a));
+        Uninstaller = new UninstallLauncher(ExecutablePath, OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), Autostart, Quit,
+            text => Notifier.Show(text, () => { }), UninstallLauncher.StartProcess, Uninstall.RegisteredSetupDir);
     }
+
+    // Den exe, der kører; startet gennem winget's henvisning (Links\AulaSync.exe) selve filen, så start ved login og genvejen
+    // i Start-menuen peger samme sted hen.
+    static string ExecutablePath { get; } = Environment.ProcessPath is { } path ? StartMenuShortcut.RealPath(path) : "AulaSync";
 
     public AppPaths Paths { get; }
     public FileLog Log { get; }
@@ -58,6 +64,7 @@ public sealed class AppHost
     public AppWindows Windows { get; }
     public IMainActions Actions { get; }
     public INotifier Notifier { get; }
+    public UninstallLauncher Uninstaller { get; }
     public Relogin Relogin { get; }
     public ImportReminder ImportReminder { get; }
     public TimeProvider Time { get; } = TimeProvider.System;
@@ -70,10 +77,17 @@ public sealed class AppHost
         Log.Info($"AulaSync {SettingsViewModel.Version} starter{(_silent ? " (--silent)" : "")}");
         if (OperatingSystem.IsWindows() && OldVersion.IsRunning()) Notifier.Show(OldVersion.Text, () => { });
         _ = Task.Run(UpdateStartMenuShortcut);
+        // Start ved login følger med, når AulaSync er flyttet eller installeret et nyt sted (fx den løse AulaSync.exe fra før
+        // installationsprogrammet).
+        try { if (Autostart.Retarget()) Log.Info("Start ved login peger nu på denne AulaSync"); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            Log.Error("Kunne ikke rette start ved login", ex);
+        }
         ServerRunning = StartServer();
         _ = Scheduler.RunAsync(_cts.Token).ContinueWith(t => Log.Error("Baggrundsplanen stoppede", t.Exception!),
             TaskContinuationOptions.OnlyOnFaulted);
-        _channel.Listen(() => Dispatcher.UIThread.Post(Windows.ShowMainOrOnboarding));
+        _channel.Listen(() => Dispatcher.UIThread.Post(Windows.ShowMainOrOnboarding), () => Dispatcher.UIThread.Post(Quit));
 
         // Sync ved login; ikon og menu følger status.
         Session.Changed += () =>
@@ -117,10 +131,10 @@ public sealed class AppHost
     // AulaSync videre; genvejen er kun en hjælp til at finde den.
     void UpdateStartMenuShortcut()
     {
-        if (!OperatingSystem.IsWindows() || Environment.ProcessPath is not { } exe) return;
+        if (!OperatingSystem.IsWindows() || Environment.ProcessPath is null) return;
         try
         {
-            if (StartMenuShortcut.Ensure(StartMenuShortcut.DefaultPath, StartMenuShortcut.RealPath(exe)))
+            if (StartMenuShortcut.Ensure(StartMenuShortcut.DefaultPath, ExecutablePath))
                 Log.Info("Genvejen AulaSync i Start-menuen er lavet eller rettet");
         }
         catch (Exception ex) { Log.Error("Kunne ikke lave genvejen AulaSync i Start-menuen", ex); }
@@ -134,7 +148,7 @@ public sealed class AppHost
         _server = UserPort.Start(Config, port =>
         {
             var server = new IcsServer(Paths.Calendars, Log, port);
-            server.Fetched += name => _ = RecordFetchAsync(name);
+            server.Fetched += (name, agent) => _ = RecordFetchAsync(name, agent);
             if (server.TryStart()) return server;
             server.Dispose();
             return null;
@@ -142,10 +156,11 @@ public sealed class AppHost
         return _server is not null;
     }
 
-    // Kalenderprogrammet hentede et skema: rækken skifter fra "Venter på Kalender…" til "✓ Tilføjet".
-    async Task RecordFetchAsync(string fileName)
+    // Kalenderprogrammet hentede et skema: rækken skifter fra "Venter på Kalender…" til "✓ Tilføjet", og AulaSync kan se,
+    // om et skema ikke længere bliver hentet (FetchWatch).
+    async Task RecordFetchAsync(string fileName, string userAgent)
     {
-        try { await Sync.MarkFetchedAsync(fileName); }
+        try { await Sync.MarkFetchedAsync(fileName, userAgent); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Log.Error($"Kunne ikke gemme, at {fileName} blev hentet", ex);

@@ -80,9 +80,23 @@ public class SubscriptionStoreTests
             new(new ScheduleRef(ScheduleKind.Employee, "1001", "Anna Eksempel", "AE"), AddedAt: At, FetchedAt: At.AddMinutes(1)),
             new(new ScheduleRef(ScheduleKind.Group, "88231", "7A"), ImportedAt: At, ImportHash: "abc123", ImportUntil: At.AddDays(90)),
             new(new ScheduleRef(ScheduleKind.Resource, "412", "53")),
+            new(new ScheduleRef(ScheduleKind.Group, "5", "8B"), FetchedAt: At, LastFetchedAt: At.AddDays(2), FetchedBy: "Outlook"),
         ];
         store.Save(items);
         Assert.Equal(items, store.Load());
+    }
+
+    // Filer fra før 3.2 har ikke seneste hentning og program.
+    [Fact]
+    public void Old_file_without_last_fetch_loads()
+    {
+        using var dir = new TempDir();
+        File.WriteAllText(dir.File("abonnementer.json"),
+            """[{"Kind":"Group","Id":"5","Name":"7A","Initials":"","AddedAt":null,"ImportedAt":null,"ImportHash":null,"FetchedAt":"2026-10-01T08:00:00+00:00"}]""");
+        var s = Assert.Single(new SubscriptionStore(dir.File("abonnementer.json")).Load());
+        Assert.True(s.Fetched);
+        Assert.Null(s.LastFetchedAt);
+        Assert.Null(s.FetchedBy);
     }
 
     // Fetched: et kalenderprogram har hentet filen efter brugerens seneste klik på hovedknappen (eller helt uden klik).

@@ -69,6 +69,68 @@ public class SyncServiceTests : IDisposable
         Assert.True(_store.Load()[1].Fetched);
     }
 
+    // Seneste hentning gemmes højst en gang i timen. Programmet gemmes, når det kendes; en browser overskriver det ikke, og
+    // "Tilføj igen" glemmer det ikke.
+    [Fact]
+    public async Task Last_fetch_is_saved_at_most_hourly()
+    {
+        const string outlook = "Microsoft Office/16.0 (Windows NT 10.0; Microsoft Outlook 16.0; Pro)";
+        const string browser = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141.0 Safari/537.36";
+        Subscribe(SevenA);
+        await _sync.MarkFetchedAsync(SevenA.FileName, outlook);
+        var s = _store.Load().Single();
+        Assert.Equal((Start, Start, "Outlook"), (s.FetchedAt, s.LastFetchedAt, s.FetchedBy));
+
+        _time.Advance(TimeSpan.FromMinutes(59));
+        await _sync.MarkFetchedAsync(SevenA.FileName, "macOS/15.6 CalendarAgent/1000");
+        Assert.Equal((Start, "Outlook"), (_store.Load().Single().LastFetchedAt, _store.Load().Single().FetchedBy));
+        Assert.Equal(Start.AddMinutes(59), _sync.CheckFetch(_store.Load().Single()).LastFetched); // husket, ikke gemt
+
+        _time.Advance(TimeSpan.FromMinutes(1));
+        await _sync.MarkFetchedAsync(SevenA.FileName, browser);
+        s = _store.Load().Single();
+        Assert.Equal((Start, Start.AddHours(1), "Outlook"), (s.FetchedAt, s.LastFetchedAt, s.FetchedBy));
+
+        _time.Advance(TimeSpan.FromHours(1));
+        await _sync.MarkFetchedAsync(SevenA.FileName, "macOS/15.6 CalendarAgent/1000");
+        Assert.Equal("Kalender", _store.Load().Single().FetchedBy);
+
+        await _sync.MarkAddedAsync(SevenA);
+        Assert.Equal("Kalender", _store.Load().Single().FetchedBy);
+    }
+
+    // At et skema ikke hentes længere, ses ved hentningerne, også når hovedvinduet ikke er åbent: Outlook henter kun 7A i
+    // fem timer, lukkes og åbnes næste morgen; Annas skema mangler stadig.
+    [Fact]
+    public async Task Missing_schedule_is_noticed_without_the_main_window()
+    {
+        const string outlook = "Microsoft Office/16.0 (Windows NT 10.0; Microsoft Outlook 16.0; Pro)";
+        Subscribe(Anna, SevenA);
+        await _sync.MarkFetchedAsync(Anna.FileName, outlook);
+        await _sync.MarkFetchedAsync(SevenA.FileName, outlook);
+        for (var i = 0; i < 10; i++) // Annas kalender er slettet i Outlook
+        {
+            _time.Advance(TimeSpan.FromMinutes(30));
+            await _sync.MarkFetchedAsync(SevenA.FileName, outlook);
+        }
+        _time.Advance(TimeSpan.FromHours(15)); // Outlook lukket om natten, åbnet igen om morgenen
+        await _sync.MarkFetchedAsync(SevenA.FileName, outlook);
+        Assert.Equal(FetchHealth.Missing, _sync.CheckFetch(_store.Load().Single(s => s.Key == Anna.Key)).Health);
+        Assert.Equal(FetchHealth.Ok, _sync.CheckFetch(_store.Load().Single(s => s.Key == SevenA.Key)).Health);
+    }
+
+    // Skemaer fra 3.1 har kun første hentning: ved første start i 3.2 får de seneste hentning = nu, og uden gemt program
+    // bruges det valgte kalenderprogram.
+    [Fact]
+    public void Schedules_from_3_1_get_a_last_fetch_and_the_chosen_program()
+    {
+        _store.Save([new Subscription(SevenA, FetchedAt: Start.AddDays(-20)), new Subscription(Anna)]);
+        var config = new AppConfig(CalendarApp.OutlookClassic);
+        var sync = new SyncService(_store, _dir.File("kalendere"), new FileLog(_dir.File("log.txt")), _time, NoDelay, () => config);
+        Assert.Equal([Start, null], _store.Load().Select(s => s.LastFetchedAt));
+        Assert.Equal("Outlook", sync.CheckFetch(_store.Load()[0]).Program);
+    }
+
     [Fact]
     public async Task Without_client_nothing_happens()
     {
@@ -388,7 +450,7 @@ public class SyncServiceTests : IDisposable
         ics = File.ReadAllText(sync.FilePath(SevenA));
         Assert.Contains("REFRESH-INTERVAL;VALUE=DURATION:PT30M\r\n", ics);
         Assert.Contains("UID:aulasync-status-klasse-88231@aulasync\r\n", ics);
-        Assert.Contains("SUMMARY:AulaSync opdateret man. 13. apr. 11:00\r\n", ics); // 9:00 UTC er 11:00 i København
+        Assert.Contains("SUMMARY:Opd. 130426@11:00\r\n", ics); // 9:00 UTC er 11:00 i København
         Assert.Equal(1, sync.StateOf(SevenA).Lessons);
         Assert.False(sync.ChangedSinceImport(sync.Subscriptions.Single()));
     }

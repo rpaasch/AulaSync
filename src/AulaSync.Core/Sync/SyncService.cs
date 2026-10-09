@@ -31,6 +31,7 @@ public sealed class SyncService
     readonly object _lock = new();
     readonly Dictionary<string, ScheduleState> _states = new();
     readonly HashSet<string> _reportedImports; // importerede skemaer, der er meldt som ændret (eller var det ved start)
+    readonly FetchWatch _fetches;
     IAulaClient? _client;
     string _institution = ""; // institutionens nummer i filnavnene (CalendarFiles)
     DateTimeOffset? _lastSyncStarted;
@@ -46,6 +47,8 @@ public sealed class SyncService
         _delay = delay;
         _config = config ?? (() => new AppConfig());
         Status = SyncStatus.Initial(store.Load().Count);
+        _fetches = new FetchWatch(time.GetUtcNow());
+        StampLastFetched();
         _reportedImports = ChangedImports().Select(s => s.Key).ToHashSet();
     }
 
@@ -198,16 +201,43 @@ public sealed class SyncService
             ? s with { AddedAt = now, ImportedAt = now, ImportHash = hash, ImportUntil = until } : s).ToList());
     }
 
-    // Serveren har udleveret filen (200 eller 304), så kalenderprogrammet har skemaet. Kun første hentning efter et klik
-    // gemmes, så en kalender, der henter hvert 5. minut, ikke skriver abonnementer.json hver gang.
-    public Task MarkFetchedAsync(string fileName)
+    // Seneste hentning gemmes højst så tit (se MarkFetchedAsync); FetchWatch husker den præcise tid, mens AulaSync kører.
+    public static readonly TimeSpan SaveFetchEvery = TimeSpan.FromHours(1);
+
+    // Serveren har udleveret filen (200 eller 304), så kalenderprogrammet har skemaet. Første hentning efter et klik gemmes
+    // straks; derefter gemmes seneste hentning højst en gang i timen, så en kalender, der henter hvert 5. minut, ikke skriver
+    // abonnementer.json hver gang. Programmet gemmes, når det kendes; en browser eller et ukendt program overskriver det ikke.
+    public async Task MarkFetchedAsync(string fileName, string userAgent = "")
     {
         var now = _time.GetUtcNow();
-        bool Waiting(Subscription s) => s.Schedule.FileName == fileName && !s.Fetched;
-        return ChangeSubscriptionsAsync(list => !list.Any(Waiting)
+        var program = FetchWatch.ProgramOf(userAgent);
+        _fetches.Record(fileName, program, now);
+        bool Save(Subscription s) => s.Schedule.FileName == fileName
+            && (!s.Fetched || s.LastFetchedAt is not { } last || now - last >= SaveFetchEvery || last > now || (s.FetchedBy is null && program is not null));
+        await ChangeSubscriptionsAsync(list => !list.Any(Save)
             ? list
-            : list.Select(s => Waiting(s) ? s with { FetchedAt = now } : s).ToList());
+            : list.Select(s => Save(s) ? s with { FetchedAt = s.Fetched ? s.FetchedAt : now, LastFetchedAt = now, FetchedBy = program ?? s.FetchedBy } : s).ToList());
+        // Hver hentning kan vise, at et andet skema ikke hentes længere (FetchWatch husker det).
+        foreach (var s in Subscriptions) _fetches.Check(WithProgram(s), now);
     }
+
+    // Skemaer fra før 3.2 har kun første hentning (FetchedAt). Første gang får de seneste hentning = nu, så "ikke hentet i
+    // 3 dage" regnes fra opgraderingen og ikke rykker ved hver start.
+    void StampLastFetched()
+    {
+        var list = _store.Load();
+        if (!list.Any(s => s.Fetched && s.LastFetchedAt is null)) return;
+        var now = _time.GetUtcNow();
+        try { _store.Save(list.Select(s => s.Fetched && s.LastFetchedAt is null ? s with { LastFetchedAt = now } : s).ToList()); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _log.Error("Kunne ikke gemme seneste hentning", ex); }
+    }
+
+    // Henter kalenderprogrammet stadig skemaet (FetchWatch)? Uden kendt program (fx fra 3.1) bruges det valgte
+    // kalenderprogram.
+    public FetchCheck CheckFetch(Subscription subscription) => _fetches.Check(WithProgram(subscription), _time.GetUtcNow());
+
+    Subscription WithProgram(Subscription s) =>
+        s.FetchedBy is not null ? s : s with { FetchedBy = FetchWatch.ProgramOf(_config().CalendarApp) };
 
     // Rollen (Lærer, Pædagog, Leder) på valgte medarbejderskemaer følger Aula: et skema valgt uden rolle, eller hvis rolle
     // er ændret, får den kendte rolle. En ukendt rolle ("") ændrer intet, og uden ændringer skrives filen ikke.

@@ -1,5 +1,6 @@
 # Udgivelse af AulaSync (plan Task 20).
-# - Versionsmærke vX.Y.Z: test, byg Windows-exe og Mac-dmg'er, lav en GitHub-udgivelse med filerne og winget-manifesterne.
+# - Versionsmærke vX.Y.Z: test, byg Windows-installationsprogrammet og Mac-dmg'erne, lav en GitHub-udgivelse med filerne og
+#   winget-manifesterne.
 # - Push til en gren, der ændrer pakningen, eller kørt i hånden (Actions › Udgivelse › Run workflow, kun fra
 #   standardgrenen): det samme, men kun som artefakter, uden udgivelse. Sti-filteret gælder ikke for versionsmærker.
 name: Udgivelse
@@ -55,6 +56,7 @@ jobs:
   windows:
     needs: [version, test]
     runs-on: windows-latest
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
@@ -63,27 +65,46 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      # Genvejen i Start-menuen bruger Windows' egen ShellLink og kan kun testes her (springes over på Linux).
-      - name: Tjek genvejen i Start-menuen
-        run: dotnet test tests/AulaSync.App.Tests -c Release --filter "FullyQualifiedName~StartMenuShortcutTests"
+      # Genvejen i Start-menuen, start ved login og --quit bruger Windows selv og kan kun testes her (springes over på Linux).
+      - name: Tjek Windows-delene
+        run: dotnet test tests/AulaSync.App.Tests -c Release --filter "FullyQualifiedName~StartMenuShortcutTests|FullyQualifiedName~AutostartTests|FullyQualifiedName~QuitRunningTests"
       - name: Byg AulaSync.exe (selvstændig, én fil)
         run: >
           dotnet publish src/AulaSync.App -c Release -r win-x64 --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
           -p:DebugType=none -p:Version=${{ needs.version.outputs.version }} -o out/win
+      # Installationsprogrammet (Inno Setup, for brugeren selv, uden administrator); prøves af bagefter, også opgradering
+      # fra den løse AulaSync.exe og afinstallation.
+      - name: Byg installationsprogrammet
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; if ($LASTEXITCODE) { exit $LASTEXITCODE } }
+          & $iscc /Q "/DVersion=${{ needs.version.outputs.version }}" "/DSource=$PWD\out\win" "/O$PWD\out\setup" packaging\windows\AulaSync.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Prøv installationsprogrammet af
+        shell: pwsh
+        timeout-minutes: 20
+        run: packaging/windows/test-installer.ps1 out/setup/AulaSync-Setup.exe out/win/AulaSync.exe
       - name: winget-manifester
-        run: bash packaging/winget/make-manifests.sh "${{ needs.version.outputs.version }}" out/win/AulaSync.exe "$GITHUB_REPOSITORY" out/winget
+        run: >
+          bash packaging/winget/make-manifests.sh "${{ needs.version.outputs.version }}"
+          out/setup/AulaSync-Setup.exe out/win/AulaSync.exe "$GITHUB_REPOSITORY" out/winget
       - name: Tjek manifesterne mod winget-skemaerne
         run: |
           pip install --quiet check-jsonschema
           d="out/winget/manifests/r/rpaasch/AulaSync/${{ needs.version.outputs.version }}"
-          check-jsonschema --schemafile https://aka.ms/winget-manifest.version.1.6.0.schema.json "$d/rpaasch.AulaSync.yaml"
-          check-jsonschema --schemafile https://aka.ms/winget-manifest.installer.1.6.0.schema.json "$d/rpaasch.AulaSync.installer.yaml"
-          check-jsonschema --schemafile https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json "$d/rpaasch.AulaSync.locale.da-DK.yaml"
+          check-jsonschema --schemafile https://aka.ms/winget-manifest.version.1.12.0.schema.json "$d/rpaasch.AulaSync.yaml"
+          check-jsonschema --schemafile https://aka.ms/winget-manifest.installer.1.12.0.schema.json "$d/rpaasch.AulaSync.installer.yaml"
+          check-jsonschema --schemafile https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json "$d/rpaasch.AulaSync.locale.da-DK.yaml"
+      # Artefaktet får mapperne setup/ og win/ (fælles rod: out/).
       - uses: actions/upload-artifact@v7
         with:
           name: windows
-          path: out/win/AulaSync.exe
+          path: |
+            out/setup/AulaSync-Setup.exe
+            out/win/AulaSync.exe
       - uses: actions/upload-artifact@v7
         with:
           name: winget
@@ -92,6 +113,7 @@ jobs:
   mac:
     needs: [version, test]
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -125,4 +147,4 @@ jobs:
           v="${{ needs.version.outputs.version }}"
           (cd artifacts/winget && zip -qr "../../winget-manifests-$v.zip" manifests)
           gh release create "$GITHUB_REF_NAME" --title "AulaSync $v" --notes-file packaging/release-notes.md \
-            artifacts/windows/AulaSync.exe artifacts/mac/*.dmg "winget-manifests-$v.zip"
+            artifacts/windows/setup/AulaSync-Setup.exe artifacts/windows/win/AulaSync.exe artifacts/mac/*.dmg "winget-manifests-$v.zip"

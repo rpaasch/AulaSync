@@ -7,7 +7,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>AulaSync.App</RootNamespace>
     <AssemblyName>AulaSync</AssemblyName>
-    <Version>3.1.1</Version>
+    <Version>3.2.0</Version>
+    <Product>AulaSync</Product>
+    <AssemblyTitle>AulaSync</AssemblyTitle>
+    <Description>Holder skemaer fra Aula opdateret i din kalender</Description>
+    <Copyright>Copyright (c) 2026 Rasmus Paasch</Copyright>
+    <!-- Ikonet tegnes af packaging/icon/make-icons.py -->
+    <ApplicationIcon>..\..\packaging\icon\AulaSync.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- Windows: login-webviewet kræver et manifest med understøttede Windows-versioner (se app.manifest) -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -23,6 +29,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AulaSync.Core\AulaSync.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="..\..\packaging\icon\AulaSync.ico" Link="Assets\AulaSync.ico" />
+    <AvaloniaResource Include="..\..\packaging\icon\tray\*" Link="Assets\Tray\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

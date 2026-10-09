@@ -3,11 +3,13 @@ using System.Text.Json;
 namespace AulaSync.Core;
 
 // AddedAt: brugeren har klikket hovedknappen (abonnér/kopiér). ImportedAt/ImportHash: brugeren har importeret filen.
-// FetchedAt: et kalenderprogram hentede filen fra AulaSync (første hentning efter AddedAt).
+// FetchedAt: et kalenderprogram hentede filen fra AulaSync (første hentning efter AddedAt). LastFetchedAt/FetchedBy: seneste
+// hentning (gemt højst en gang i timen, se SyncService.MarkFetchedAsync) og programmet (FetchWatch.ProgramOf).
 // ImportUntil: slutningen af det tidsrum, importen dækker (90 dage efter ImportedAt); ImportHash dækker lektionerne fra
 // ImportedAt til ImportUntil (null: hele filen, fra før tidsrummet blev gemt).
 public sealed record Subscription(ScheduleRef Schedule, DateTimeOffset? AddedAt = null, DateTimeOffset? ImportedAt = null,
-    string? ImportHash = null, DateTimeOffset? FetchedAt = null, DateTimeOffset? ImportUntil = null)
+    string? ImportHash = null, DateTimeOffset? FetchedAt = null, DateTimeOffset? ImportUntil = null,
+    DateTimeOffset? LastFetchedAt = null, string? FetchedBy = null)
 {
     public string Key => Schedule.Key;
 
@@ -19,7 +21,7 @@ public sealed class SubscriptionStore(string path)
 {
     sealed record Entry(string? Kind, string? Id, string? Name, string? Initials,
         DateTimeOffset? AddedAt, DateTimeOffset? ImportedAt, string? ImportHash, string? Role = null, DateTimeOffset? FetchedAt = null,
-        DateTimeOffset? ImportUntil = null);
+        DateTimeOffset? ImportUntil = null, DateTimeOffset? LastFetchedAt = null, string? FetchedBy = null);
 
     static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
@@ -40,7 +42,8 @@ public sealed class SubscriptionStore(string path)
         {
             if (e?.Kind is null || e.Id is null || !ScheduleRef.IsValidId(e.Id)) continue;
             if (!Enum.TryParse<ScheduleKind>(e.Kind, out var kind) || !Enum.IsDefined(kind) || int.TryParse(e.Kind, out _)) continue;
-            result.Add(new Subscription(new ScheduleRef(kind, e.Id, e.Name ?? "", e.Initials ?? "", e.Role ?? ""), e.AddedAt, e.ImportedAt, e.ImportHash, e.FetchedAt, e.ImportUntil));
+            result.Add(new Subscription(new ScheduleRef(kind, e.Id, e.Name ?? "", e.Initials ?? "", e.Role ?? ""), e.AddedAt, e.ImportedAt, e.ImportHash, e.FetchedAt, e.ImportUntil,
+                e.LastFetchedAt, e.FetchedBy));
         }
         return result;
     }
@@ -48,5 +51,5 @@ public sealed class SubscriptionStore(string path)
     public void Save(IEnumerable<Subscription> items) =>
         AtomicFile.WriteAllText(path, JsonSerializer.Serialize(
             items.Select(s => new Entry(s.Schedule.Kind.ToString(), s.Schedule.Id, s.Schedule.Name, s.Schedule.Initials,
-                s.AddedAt, s.ImportedAt, s.ImportHash, s.Schedule.Role, s.FetchedAt, s.ImportUntil)).ToList(), Options));
+                s.AddedAt, s.ImportedAt, s.ImportHash, s.Schedule.Role, s.FetchedAt, s.ImportUntil, s.LastFetchedAt, s.FetchedBy)).ToList(), Options));
 }
