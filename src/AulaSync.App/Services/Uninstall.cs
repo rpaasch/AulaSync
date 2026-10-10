@@ -60,6 +60,22 @@ public static class Uninstall
         ];
     }
 
+    // Mac: Homebrews optegnelse af AulaSync (brew install --cask rpaasch/tap/aulasync). Uden den regner Homebrew ikke
+    // længere AulaSync for installeret; ellers viser brew list den stadig, og brew upgrade fejler, fordi appen mangler.
+    // Homebrew ligger i /opt/homebrew (Apple-chip) eller /usr/local (Intel); HOMEBREW_PREFIX kommer kun med, når AulaSync
+    // er startet fra en Terminal, hvor den er sat (Finder, Dock og start ved login sætter den ikke).
+    public static IReadOnlyList<string> MacHomebrew(string? prefix)
+    {
+        var dirs = new List<string>();
+        foreach (var p in new[] { prefix, "/opt/homebrew", "/usr/local" })
+        {
+            if (string.IsNullOrWhiteSpace(p)) continue;
+            var dir = Path.Combine(p, "Caskroom", "aulasync");
+            if (!dirs.Contains(dir)) dirs.Add(dir);
+        }
+        return dirs;
+    }
+
     // Windows: den portable AulaSync fra winget ligger i %LOCALAPPDATA%\Microsoft\WinGet\Packages\rpaasch.AulaSync_<kilde>;
     // winget husker den under Installerede apps med mappens navn og har en henvisning i Links. null for andre placeringer.
     public static (string PackageDir, string UninstallKey, string Link)? WingetPortable(string exePath, string localAppData)
@@ -89,7 +105,7 @@ public static class Uninstall
     {
         if (!WaitForExit(paths.LockFile, wait)) return 1;
         if (OperatingSystem.IsWindows()) RemoveWindows(exePath, removeShortcut);
-        if (OperatingSystem.IsMacOS()) RemoveMac(exePath);
+        if (OperatingSystem.IsMacOS()) RemoveMac();
         DeleteDirectory(paths.Root, DeleteFor);
         if (OperatingSystem.IsWindows())
         {
@@ -99,6 +115,9 @@ public static class Uninstall
             UninstallSetup(exePath);
             DeleteAfterExit(exePath, paths.Root);
         }
+        // Mac: AulaSync.app flyttes allersidst. Bagefter kan .NET ikke hente flere filer fra app'en (fx System.Linq.dll),
+        // så intet må køre efter flytningen, som ikke allerede er indlæst.
+        if (OperatingSystem.IsMacOS()) TrashBundle(exePath);
         return 0;
     }
 
@@ -245,9 +264,9 @@ public static class Uninstall
         if (packageDir is not null) yield return ("AULASYNC_PACKAGE", packageDir);
     }
 
-    // Mac: start ved login (LaunchAgent, også i launchd), macOS' mapper for AulaSync, indstillinger i cfprefsd og selve
-    // AulaSync.app, som flyttes til papirkurven (ikke fra .dmg-filen eller macOS' midlertidige kopi).
-    static void RemoveMac(string exePath)
+    // Mac: start ved login (LaunchAgent, også i launchd), macOS' mapper for AulaSync, indstillinger i cfprefsd og Homebrews
+    // optegnelse. Selve AulaSync.app flyttes til sidst (TrashBundle).
+    static void RemoveMac()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         DeleteFile(LaunchAgent.PlistPath(home));
@@ -255,7 +274,16 @@ public static class Uninstall
         foreach (var path in MacLibrary(home, LaunchAgent.Label))
             if (Directory.Exists(path)) DeleteDirectory(path, DeleteFor); else DeleteFile(path);
         RunQuietly("/usr/bin/defaults", "delete", LaunchAgent.Label);
-        // Kan AulaSync.app ikke flyttes (fx ikke administrator på Macen), vises den i Finder, så den kan trækkes væk.
+        // Ét forsøg: tilhører Homebrew en anden bruger på Macen, kan mappen ikke slettes.
+        foreach (var caskroom in MacHomebrew(Environment.GetEnvironmentVariable("HOMEBREW_PREFIX")))
+            DeleteDirectory(caskroom, TimeSpan.Zero);
+    }
+
+    // Mac: AulaSync.app til papirkurven (ikke fra .dmg-filen eller macOS' midlertidige kopi). Kan den ikke flyttes (fx ikke
+    // administrator på Macen), vises den i Finder, så den kan trækkes væk.
+    static void TrashBundle(string exePath)
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (BundleOf(exePath) is { } bundle && !MacAutostart.IsTransient(bundle) && !MoveToTrash(bundle, home))
             RunQuietly("/usr/bin/open", "-R", bundle);
     }

@@ -81,6 +81,8 @@ public class PlatformTests
         var args = xml.Descendants("array").Single().Elements("string").Select(e => e.Value).ToList();
         Assert.Equal(["/Applications/AulaSync & co.app/Contents/MacOS/AulaSync", "--silent"], args);
         Assert.Contains(values, e => e.Name == "true");
+        var associated = values.SkipWhile(e => e.Value != "AssociatedBundleIdentifiers").Skip(1).First();
+        Assert.Equal(("string", "dk.rpaasch.aulasync"), (associated.Name.LocalName, associated.Value));
     }
 
     [Fact]

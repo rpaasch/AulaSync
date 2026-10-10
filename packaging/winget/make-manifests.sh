@@ -9,6 +9,11 @@
 #   installationsprogram, så dem, der har den, bliver ved med at få den med winget upgrade. AulaSync lægger selv sin
 #   genvej i Start-menuen.
 #
+# InstallerType, InstallerSwitches og Commands står øverst som i 3.1.1 (winget-pkgs' kontrol melder det som en
+# uoverensstemmelse, hvis de mangler dér i forhold til den forrige version) og gælder den løse exe. Det, der står øverst,
+# arver installationsprogrammet også, felt for felt, så det har sin egen type og Innos stille-parametre; ellers kørte
+# winget det med --silent, som Inno ikke kender, og guiden kom frem. Scope må ikke stå øverst (portable har intet Scope).
+#
 #   make-manifests.sh 3.2.0 out/setup/AulaSync-Setup.exe out/win/AulaSync.exe rpaasch/AulaSync out/winget
 set -euo pipefail
 
@@ -33,6 +38,12 @@ cat > "$dir/rpaasch.AulaSync.installer.yaml" <<YAML
 
 PackageIdentifier: rpaasch.AulaSync
 PackageVersion: $version
+InstallerType: portable
+InstallerSwitches:
+  Silent: --silent
+  SilentWithProgress: --silent
+Commands:
+  - AulaSync
 Installers:
   - Architecture: x64
     InstallerType: inno
@@ -40,13 +51,12 @@ Installers:
     InstallerUrl: $url/AulaSync-Setup.exe
     InstallerSha256: $(sha "$setup")
     InstallerSwitches:
+      Silent: /SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+      SilentWithProgress: /SP- /SILENT /SUPPRESSMSGBOXES /NORESTART
       Custom: /LAUNCH=1
     UpgradeBehavior: install
     ProductCode: '{EB8DDE1A-F008-42A1-AA73-7110F88E4044}_is1'
   - Architecture: x64
-    InstallerType: portable
-    Commands:
-      - AulaSync
     InstallerUrl: $url/AulaSync.exe
     InstallerSha256: $(sha "$exe")
 ManifestType: installer

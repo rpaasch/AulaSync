@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>AulaSync.App</RootNamespace>
     <AssemblyName>AulaSync</AssemblyName>
-    <Version>3.2.0</Version>
+    <Version>3.2.1</Version>
     <Product>AulaSync</Product>
     <AssemblyTitle>AulaSync</AssemblyTitle>
     <Description>Holder skemaer fra Aula opdateret i din kalender</Description>

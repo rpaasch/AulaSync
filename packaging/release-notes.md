@@ -1,5 +1,10 @@
 AulaSync 3 er en ny udgave med ét formål: skemaer fra Aula, der holder sig opdateret i din kalender, på Windows og Mac.
 
+**Nyt i 3.2.1**
+- Mac: AulaSync er nu signeret af udvikleren og undersøgt af Apple (notariseret). Første gang spørger macOS kun, om du vil åbne en app, der er hentet fra internettet; klik *Åbn*. Du skal ikke længere vælge *Åbn alligevel* i Systemindstillinger › Anonymitet & sikkerhed.
+- Mac: AulaSync kan installeres med Homebrew: `brew install --cask rpaasch/tap/aulasync`, og en ny udgave får du med `brew upgrade --cask rpaasch/tap/aulasync`. macOS spørger kun første gang, ikke ved de næste opgraderinger.
+- Mac: *Afinstallér AulaSync…* fjerner også Homebrews optegnelse af AulaSync, så Homebrew ikke længere regner den for installeret.
+
 **Nyt i 3.2.0**
 - Windows: AulaSync har fået et installationsprogram, `AulaSync-Setup.exe`. Det installerer AulaSync for dig uden administratorrettigheder, lægger den i Start-menuen og åbner den. `winget install rpaasch.AulaSync` gør det samme. Opdatering med `AulaSync-Setup.exe` lukker en kørende AulaSync og starter den igen.
 - AulaSync har fået sit eget ikon på Windows og Mac, også i systembakken og menulinjen. Har du fastgjort en ældre AulaSync til proceslinjen, så frigør den, og fastgør AulaSync igen fra Start-menuen.
@@ -30,6 +35,6 @@ AulaSync 3 er en ny udgave med ét formål: skemaer fra Aula, der holder sig opd
 
 **Installation**
 - Windows 10 og 11 (64-bit): hent `AulaSync-Setup.exe` herunder, og åbn den. Viser Windows "Windows beskyttede din pc", så vælg *Flere oplysninger* › *Kør alligevel*. Du kan også bruge `winget install rpaasch.AulaSync`; en ny udgave kommer først i winget, når Microsoft har godkendt den. `AulaSync.exe` er udgaven uden installation, til ældre installationer fra winget og til IT.
-- Mac (macOS 15 eller nyere): hent `-arm64.dmg` til Mac med Apple-chip (M1 og nyere) eller `-x64.dmg` til Mac med Intel, og træk AulaSync over i Programmer. Appen er ikke signeret af Apple, så første gang skal du give lov: åbn AulaSync fra Programmer (ikke fra `.dmg`-filen), og klik *Udført*, når macOS siger, at appen ikke blev åbnet. Åbn så *Systemindstillinger › Anonymitet og sikkerhed*, klik *Åbn alligevel* ved AulaSync, og bekræft med adgangskoden til din Mac. Når Kalender spørger, så vælg Placering: *På min Mac*.
+- Mac (macOS 15 eller nyere): hent `-arm64.dmg` til Mac med Apple-chip (M1 og nyere) eller `-x64.dmg` til Mac med Intel, og træk AulaSync over i Programmer. Åbn AulaSync fra Programmer (ikke fra `.dmg`-filen), og klik *Åbn*, når macOS spørger, om du vil åbne en app, der er hentet fra internettet. Med Homebrew: `brew install --cask rpaasch/tap/aulasync`. Når Kalender spørger, så vælg Placering: *På min Mac*.
 
 AulaSync er ikke tilknyttet eller godkendt af Aula, KOMBIT, Netcompany eller KMD.
