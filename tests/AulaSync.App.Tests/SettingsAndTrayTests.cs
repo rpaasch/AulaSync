@@ -116,7 +116,7 @@ public class SettingsViewModelTests : IDisposable
         vm.OpenCalendarFolderCommand.Execute(null);
         vm.OpenLogCommand.Execute(null);
         Assert.Equal([_host.Paths.Calendars, _host.Paths.Log], _platform.Opened);
-        Assert.Equal("Version 3.2.0", vm.VersionText);
+        Assert.Equal("Version 3.2.1", vm.VersionText);
     }
 
     // Hvor tit skemaerne hentes fra Aula: standard hver 4. time. Et nyt valg gemmes, og planen regnes om med det samme.
@@ -173,7 +173,7 @@ public class SettingsViewModelTests : IDisposable
         Assert.Contains("Start AulaSync, når jeg logger ind", texts);
         Assert.Contains("Hjælp", texts);
         Assert.Contains("Fejlfinding", texts);
-        Assert.Contains("Version 3.2.0", texts);
+        Assert.Contains("Version 3.2.1", texts);
         var buttons = window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).ToList();
         Assert.Contains("Vejledning", buttons);
         Assert.Contains("Kom i gang igen…", buttons);

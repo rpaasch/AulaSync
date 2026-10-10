@@ -42,6 +42,18 @@ public class UninstallTests
         ], Uninstall.MacLibrary("/Users/anna", "dk.example.aulasync"));
     }
 
+    // AulaSync fra Homebrew: optegnelsen i Caskroom, hvor Homebrew end ligger.
+    [Fact]
+    public void Homebrew_record_on_the_mac()
+    {
+        Assert.Equal(["/opt/homebrew/Caskroom/aulasync", "/usr/local/Caskroom/aulasync"], Uninstall.MacHomebrew(null));
+        Assert.Equal(
+            ["/Users/anna/brew/Caskroom/aulasync", "/opt/homebrew/Caskroom/aulasync", "/usr/local/Caskroom/aulasync"],
+            Uninstall.MacHomebrew("/Users/anna/brew"));
+        Assert.Equal(["/opt/homebrew/Caskroom/aulasync", "/usr/local/Caskroom/aulasync"], Uninstall.MacHomebrew("/opt/homebrew"));
+        Assert.Equal(["/opt/homebrew/Caskroom/aulasync", "/usr/local/Caskroom/aulasync"], Uninstall.MacHomebrew(" "));
+    }
+
     // Den portable AulaSync fra winget: winget's mappe, posten under Installerede apps og henvisningen i Links.
     [Fact]
     public void Winget_portable_is_recognised()

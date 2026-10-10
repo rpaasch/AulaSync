@@ -113,27 +113,208 @@ jobs:
   mac:
     needs: [version, test]
     runs-on: macos-latest
-    timeout-minutes: 30
+    # Notariseringen er to runder hos Apple pr. arkitektur (app'en, så dmg'en): som regel få minutter, af og til op til
+    # 15 min hver. Begge arkitekturer kører samtidig.
+    timeout-minutes: 120
+    env:
+      # Kun sand/falsk her (hemmeligheder kan ikke bruges direkte i if:); selve hemmelighederne gives kun til de trin, der
+      # bruger dem. Forks, pull requests fra forks og Dependabot får ingen hemmeligheder og signerer ad hoc som før.
+      HAS_CERT: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && secrets.MACOS_CERT_P12_PASSWORD != '' }}
+      HAS_NOTARY: ${{ (secrets.ASC_API_KEY_P8_BASE64 != '' && secrets.ASC_API_KEY_ID != '') || (secrets.NOTARY_APPLE_ID != '' && secrets.NOTARY_TEAM_ID != '' && secrets.NOTARY_APP_PASSWORD != '') }}
+      HAS_ANY_APPLE: ${{ secrets.MACOS_CERT_P12_BASE64 != '' || secrets.MACOS_CERT_P12_PASSWORD != '' || secrets.ASC_API_KEY_P8_BASE64 != '' || secrets.ASC_API_KEY_ID != '' || secrets.ASC_API_ISSUER_ID != '' || secrets.NOTARY_APPLE_ID != '' || secrets.NOTARY_TEAM_ID != '' || secrets.NOTARY_APP_PASSWORD != '' }}
+      # Versionsmærker og udgiv.ps1's prøvebygning (version-<v>) i rpaasch' egne repos skal være signeret og notariseret,
+      # ellers fejler jobbet, før noget flettes eller udgives. Repo-variablen MACOS_SIGNING: required = alle bygninger
+      # kræver det; adhoc = nødudgang: signér kun ad hoc, også når hemmelighederne findes (fx når Apples notartjeneste er nede).
+      MACOS_SIGNING: ${{ vars.MACOS_SIGNING }}
+      SIGNING_REQUIRED: ${{ vars.MACOS_SIGNING == 'required' || (vars.MACOS_SIGNING != 'adhoc' && (github.ref_type == 'tag' || startsWith(github.ref_name, 'version-')) && github.repository_owner == 'rpaasch') }}
     steps:
+      - name: Signering (Developer ID eller ad hoc)
+        id: mode
+        run: |
+          if [ "$MACOS_SIGNING" = adhoc ]; then
+            mode=adhoc
+            echo "::warning::Repo-variablen MACOS_SIGNING=adhoc: Mac-appen signeres kun ad hoc og notariseres ikke"
+          elif [ "$HAS_CERT" = true ] && [ "$HAS_NOTARY" = true ]; then mode=developer-id
+          elif [ "$HAS_ANY_APPLE" = true ]; then
+            echo "::error::Kun nogle af Apple-hemmelighederne findes (certifikat: $HAS_CERT, notarisering: $HAS_NOTARY). Se docs/superpowers/apple-notarisering.md."
+            exit 1
+          else mode=adhoc; fi
+          if [ "$SIGNING_REQUIRED" = true ] && [ "$mode" != developer-id ]; then
+            echo "::error::$GITHUB_REF_NAME skal signeres med Developer ID og notariseres, men Apple-hemmelighederne mangler i $GITHUB_REPOSITORY. Repo-variablen MACOS_SIGNING=adhoc er nødudgangen."
+            exit 1
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Mac-appen signeres: $mode"
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - name: Byg AulaSync.app og .dmg (Apple Silicon og Intel)
+      # Developer ID-certifikatet (.p12) i en midlertidig nøglering. Certifikatets navn er en persons navn, så identiteten
+      # findes her ved kørslen og står ikke i repoet; kun SHA-1 bruges videre, og navnet maskeres i loggen.
+      - name: Developer ID-certifikat i en midlertidig nøglering
+        if: steps.mode.outputs.mode == 'developer-id'
+        env:
+          P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERT_P12_PASSWORD }}
+        run: |
+          umask 077
+          kc="$RUNNER_TEMP/aulasync-signing.keychain-db"
+          p12="$RUNNER_TEMP/aulasync-signing.p12"
+          kcpw=$(openssl rand -base64 24)
+          echo "::add-mask::$kcpw"
+          printf '%s' "$P12_BASE64" | base64 --decode > "$p12"
+          security create-keychain -p "$kcpw" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kcpw" "$kc"
+          security import "$p12" -k "$kc" -f pkcs12 -P "$P12_PASSWORD" -T /usr/bin/codesign > /dev/null \
+            || { echo "::error::MACOS_CERT_P12_BASE64/MACOS_CERT_P12_PASSWORD kunne ikke importeres"; exit 1; }
+          rm -f "$p12"
+          # codesign må bruge nøglen uden at spørge. Udskriften viser nøglens navn, derfor > /dev/null.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kcpw" "$kc" > /dev/null
+          # Nøgleringen forrest i søgelisten; de eksisterende bevares.
+          old=$(security list-keychains -d user | tr -d '"' | xargs)
+          security list-keychains -d user -s "$kc" $old
+          line=$(security find-identity -v -p codesigning "$kc" | grep '"Developer ID Application: ' | head -1 || true)
+          if [ -z "$line" ]; then
+            # GitHubs Mac-maskiner har kun Apples G2-mellemcertifikat: et certifikat fra det gamle Sub-CA, et udløbet
+            # certifikat eller et uden privat nøgle er ikke gyldigt her.
+            echo "::error::MACOS_CERT_P12_BASE64 har ingen gyldig Developer ID Application-identitet med privat nøgle (udløbet, ikke fra G2 Sub-CA, eller uden privat nøgle?)"
+            exit 1
+          fi
+          name=${line#*\"}; name=${name%\"}
+          echo "::add-mask::$name"
+          person=${name#Developer ID Application: }; person=${person% (*}
+          echo "::add-mask::$person"
+          sha=$(awk '{print $2}' <<< "$line")
+          # Advarsel 30 dage før certifikatet udløber; kun datoen skrives ud.
+          pem=$(security find-certificate -a -Z -p "$kc" | awk -v h="$sha" '/^SHA-1 hash:/ { on = ($3 == h) } on && /BEGIN CERTIFICATE/ { p = 1 } p { print } p && /END CERTIFICATE/ { exit }' || true)
+          if [ -n "$pem" ] && ! openssl x509 -noout -checkend 2592000 <<< "$pem" > /dev/null; then
+            echo "::warning::Developer ID-certifikatet udløber $(openssl x509 -noout -enddate <<< "$pem" | cut -d= -f2). Lav et nyt, og opdater MACOS_CERT_P12_BASE64 og MACOS_CERT_P12_PASSWORD i rpaasch/AulaSync og rpaasch/AulaSync-dev."
+          fi
+          echo "MAC_SIGN_IDENTITY=$sha" >> "$GITHUB_ENV"
+          echo "MAC_KEYCHAIN=$kc" >> "$GITHUB_ENV"
+          echo "Developer ID Application-identitet fundet"
+      # Notariseringen: App Store Connect-nøgle (anbefalet) eller Apple-id med app-specifik adgangskode. Prøves af før
+      # bygningen, så forkerte oplysninger stopper jobbet med det samme.
+      - name: Adgang til Apples notartjeneste
+        if: steps.mode.outputs.mode == 'developer-id'
+        env:
+          P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_API_ISSUER_ID }}
+          APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          APP_PASSWORD: ${{ secrets.NOTARY_APP_PASSWORD }}
+        run: |
+          umask 077
+          if [ -n "$P8_BASE64" ] && [ -n "$KEY_ID" ]; then
+            key="$RUNNER_TEMP/aulasync-notary.p8"
+            printf '%s' "$P8_BASE64" | base64 --decode > "$key"
+            grep -q 'BEGIN PRIVATE KEY' "$key" || { echo "::error::ASC_API_KEY_P8_BASE64 er ikke en base64-kodet .p8-nøgle"; exit 1; }
+            auth=(--key "$key" --key-id "$KEY_ID")
+            [ -n "$ISSUER" ] && auth+=(--issuer "$ISSUER")
+            # Kun stien til nøglefilen går videre; id'er og adgangskoder får make-dmg-trinnet direkte fra hemmelighederne.
+            echo "NOTARY_KEY=$key" >> "$GITHUB_ENV"
+          else
+            auth=(--apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APP_PASSWORD")
+          fi
+          xcrun notarytool history "${auth[@]}" --output-format json > /dev/null \
+            || { echo "::error::Apples notartjeneste afviste oplysningerne (nøgle-id, udsteder, Apple-id, team eller adgangskode)"; exit 1; }
+          echo "Adgang til notartjenesten er i orden"
+      - name: Byg AulaSync (Apple Silicon og Intel)
         run: |
           v="${{ needs.version.outputs.version }}"
           for rid in osx-arm64 osx-x64; do
             dotnet publish src/AulaSync.App -c Release -r "$rid" --self-contained true -p:DebugType=none -p:Version="$v" -o "out/$rid"
-            bash packaging/mac/make-dmg.sh "$rid" "out/$rid" "$v" out/dmg
           done
+      # make-dmg.sh: med MAC_SIGN_IDENTITY Developer ID, notarisering og hæftning af app'en og dmg'en; uden ad hoc som
+      # før. Begge arkitekturer samtidig, så ventetiden hos Apple overlapper; hver har sin egen log.
+      - name: AulaSync.app og .dmg
+        timeout-minutes: 80
+        env:
+          NOTARY_TIMEOUT: 30m
+          # Kun med Developer ID; ellers (også MACOS_SIGNING=adhoc) får make-dmg.sh ingen notaroplysninger.
+          NOTARY_KEY_ID: ${{ steps.mode.outputs.mode == 'developer-id' && secrets.ASC_API_KEY_ID || '' }}
+          NOTARY_ISSUER: ${{ steps.mode.outputs.mode == 'developer-id' && secrets.ASC_API_ISSUER_ID || '' }}
+          NOTARY_APPLE_ID: ${{ steps.mode.outputs.mode == 'developer-id' && secrets.NOTARY_APPLE_ID || '' }}
+          NOTARY_TEAM_ID: ${{ steps.mode.outputs.mode == 'developer-id' && secrets.NOTARY_TEAM_ID || '' }}
+          NOTARY_PASSWORD: ${{ steps.mode.outputs.mode == 'developer-id' && secrets.NOTARY_APP_PASSWORD || '' }}
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          mkdir -p out/dmg
+          rids=(osx-arm64 osx-x64) pids=() failed=
+          for rid in "${rids[@]}"; do
+            bash packaging/mac/make-dmg.sh "$rid" "out/$rid" "$v" out/dmg > "out/make-dmg-$rid.log" 2>&1 &
+            pids+=($!)
+          done
+          for i in 0 1; do wait "${pids[$i]}" || failed="$failed ${rids[$i]}"; done
+          for rid in "${rids[@]}"; do
+            echo "::group::$rid"; cat "out/make-dmg-$rid.log"; echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then echo "::error::make-dmg.sh fejlede for$failed"; exit 1; fi
+      - name: Fjern nøglering og nøgle
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/aulasync-signing.keychain-db" 2> /dev/null || true
+          rm -f "$RUNNER_TEMP/aulasync-notary.p8" "$RUNNER_TEMP/aulasync-signing.p12"
+      - uses: actions/upload-artifact@v7
+        if: always() && steps.mode.outputs.mode == 'developer-id'
+        with:
+          name: notary-logs
+          path: out/dmg/notary/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: make-dmg-logs
+          path: out/make-dmg-*.log
+          if-no-files-found: ignore
+      # Apple Silicon: .NET og menulinjen starter under hardened runtime (uden Apples nøgler med en ad hoc-kopi), og
+      # Afinstallér AulaSync… rydder op. Intel prøves i mac-intel.
+      - name: Røgprøve (Apple Silicon)
+        timeout-minutes: 10
+        run: bash packaging/mac/smoke-test.sh "out/dmg/AulaSync-${{ needs.version.outputs.version }}-arm64.dmg" --hardened
+      # Homebrew-cask'en til tap'en rpaasch/homebrew-tap (udgiv.ps1 laver sin egen ud fra udgivelsens dmg'er og skubber
+      # den): brew style og audit, installation fra dmg'en og afinstallation med og uden --zap. Er dmg'erne notariseret,
+      # tjekker test-cask.sh også Gatekeeper.
+      - name: Homebrew-cask
+        shell: pwsh
+        run: |
+          $v = '${{ needs.version.outputs.version }}'
+          packaging/homebrew/make-cask.ps1 $v "out/dmg/AulaSync-$v-arm64.dmg" "out/dmg/AulaSync-$v-x64.dmg" $env:GITHUB_REPOSITORY out/homebrew/aulasync.rb
+      - name: Prøv Homebrew-cask'en af
+        timeout-minutes: 15
+        env:
+          MAC_EXPECT_NOTARIZED: ${{ steps.mode.outputs.mode == 'developer-id' }}
+        run: bash packaging/homebrew/test-cask.sh out/homebrew/aulasync.rb out/dmg
       - uses: actions/upload-artifact@v7
         with:
           name: mac
           path: out/dmg/*.dmg
+      - uses: actions/upload-artifact@v7
+        with:
+          name: homebrew
+          path: out/homebrew/aulasync.rb
+
+  # Intel-appen på en rigtig Intel-Mac: Rosetta er ikke nok, fordi .NET kører JIT anderledes dér end under hardened runtime
+  # på Intel, som AulaSync.entitlements skal dække.
+  mac-intel:
+    needs: [version, mac]
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: mac
+          path: dmg
+      - name: Røgprøve (Intel)
+        timeout-minutes: 10
+        run: bash packaging/mac/smoke-test.sh "dmg/AulaSync-${{ needs.version.outputs.version }}-x64.dmg" --hardened
 
   release:
     if: github.ref_type == 'tag'
-    needs: [version, windows, mac]
+    needs: [version, windows, mac, mac-intel]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

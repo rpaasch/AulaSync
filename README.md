@@ -43,11 +43,9 @@ Login bruger Microsoft Edge WebView2 Runtime, som følger med Windows 11 og find
 
 Hent `AulaSync-<version>-arm64.dmg` (Apple-chip, M1 og nyere) eller `AulaSync-<version>-x64.dmg` (Intel) fra [den nyeste udgave](https://github.com/rpaasch/AulaSync/releases/latest), åbn den, og træk AulaSync over i **Programmer**.
 
-Appen er endnu ikke signeret af Apple, så første gang skal du give lov. Gør det kun, hvis du selv har hentet `.dmg`-filen fra udgivelsessiden:
+Åbn AulaSync fra **Programmer** (ikke fra `.dmg`-filen, ellers kan AulaSync ikke starte af sig selv, når du logger ind). AulaSync er signeret af udvikleren og undersøgt af Apple (notariseret), så første gang spørger macOS kun, om du vil åbne en app, der er hentet fra internettet. Klik **Åbn**.
 
-1. Åbn AulaSync fra **Programmer** (ikke fra `.dmg`-filen, ellers kan AulaSync ikke starte af sig selv, når du logger ind). macOS siger, at appen ikke blev åbnet. Klik **Udført**, ikke **Flyt til papirkurv**.
-2. Åbn **Systemindstillinger › Anonymitet og sikkerhed**, rul ned, og klik **Åbn alligevel** ved AulaSync. Knappen står der kun i cirka en time. Er den væk, så åbn AulaSync fra Programmer igen.
-3. Når macOS spørger igen, så klik **Åbn alligevel**, og bekræft med adgangskoden til din Mac eller med Touch ID.
+Med [Homebrew](https://brew.sh): skriv `brew install --cask rpaasch/tap/aulasync` i Terminal. Homebrew henter den rigtige udgave til din Mac og lægger AulaSync i **Programmer**; første gang du åbner den, spørger macOS som ovenfor. Ny udgave: `brew upgrade --cask rpaasch/tap/aulasync`. Homebrew lukker AulaSync og åbner den igen, og macOS spørger ikke igen.
 
 ## Kom i gang
 
@@ -75,7 +73,7 @@ AulaSync gemmer alt på din egen computer. Din adgangskode gemmer AulaSync ikke.
 
 Kalender-serveren tager kun imod forbindelser fra din egen computer (`127.0.0.1` og `::1`) og udleverer kun skemafilerne. En hjemmeside i din browser kan ikke læse dem. Serveren har ingen adgangskode, så andre programmer og andre brugere, der er logget ind på samme computer, kan hente skemaerne. Porten vælges ved første start: 9876 eller den første ledige op til 9899, så flere brugere på samme computer som regel kan køre AulaSync samtidig. Porten reserveres dog ikke: kørte en anden brugers AulaSync ikke, da du startede AulaSync første gang, kan I få samme port, og så kan kun én af jer ad gangen køre kalender-serveren.
 
-**Log ud…** i Indstillinger glemmer dit login og sletter dine valgte skemaer, og første start vises igen. Kalenderfilerne bliver liggende, så kalenderne viser stadig de seneste skemaer, men de bliver ikke opdateret, før du vælger skemaerne igen. **Afinstallér AulaSync…** i Indstillinger fjerner alt, AulaSync har gemt på computeren: programmet, start ved login, dit login, dine indstillinger, loggen og kalenderfilerne. På Windows også genvejen i Start-menuen og mappen fra AulaSync 2 (`%USERPROFILE%\.aulasync`); på Mac også AulaSyncs WebKit-data med login og cache, og AulaSync flyttes til papirkurven. Det samme sker, når du afinstallerer AulaSync på Windows fra **Indstillinger › Apps** (**Installerede apps**, på Windows 10 **Apps og funktioner**) eller med `winget uninstall rpaasch.AulaSync`. Har du AulaSync fra winget fra før 3.2, så brug **Afinstallér AulaSync…**; **Indstillinger › Apps** og `winget uninstall` sletter dér kun programmet. Knappen findes fra AulaSync 3.2. Slet bagefter AulaSync-kalenderne i dit kalenderprogram; dem kan AulaSync ikke slette.
+**Log ud…** i Indstillinger glemmer dit login og sletter dine valgte skemaer, og første start vises igen. Kalenderfilerne bliver liggende, så kalenderne viser stadig de seneste skemaer, men de bliver ikke opdateret, før du vælger skemaerne igen. **Afinstallér AulaSync…** i Indstillinger fjerner alt, AulaSync har gemt på computeren: programmet, start ved login, dit login, dine indstillinger, loggen og kalenderfilerne. På Windows også genvejen i Start-menuen og mappen fra AulaSync 2 (`%USERPROFILE%\.aulasync`); på Mac også AulaSyncs WebKit-data med login og cache, og AulaSync flyttes til papirkurven. Det samme sker, når du afinstallerer AulaSync på Windows fra **Indstillinger › Apps** (**Installerede apps**, på Windows 10 **Apps og funktioner**) eller med `winget uninstall rpaasch.AulaSync`. Har du AulaSync fra winget fra før 3.2, så brug **Afinstallér AulaSync…**; **Indstillinger › Apps** og `winget uninstall` sletter dér kun programmet. Knappen findes fra AulaSync 3.2. Har du AulaSync fra Homebrew, fjerner `brew uninstall --zap --cask aulasync` det samme, men flytter dit login og dine data til papirkurven i stedet for at slette dem; tøm den bagefter. Knappen får også Homebrew til at glemme AulaSync. Slet bagefter AulaSync-kalenderne i dit kalenderprogram; dem kan AulaSync ikke slette.
 
 Importerer du et skema i ny Outlook, Outlook til Mac eller Outlook på nettet, ligger det bagefter også i din Outlook-konto hos Microsoft.
 
@@ -88,7 +86,7 @@ dotnet run --project src/AulaSync.App
 dotnet test AulaSync.slnx
 ```
 
-En udgivelse laves af GitHub Actions (`.github/workflows/release.yml`), når et versionsmærke som `v3.2.0` pushes: installationsprogrammet til Windows (`AulaSync-Setup.exe`, Inno Setup), den løse `AulaSync.exe` (til den portable udgave i winget og til IT), Mac-dmg'er og winget-manifester (se `packaging/`). Ikonet tegnes af `packaging/icon/make-icons.py`.
+En udgivelse laves af GitHub Actions (`.github/workflows/release.yml`), når et versionsmærke som `v3.2.0` pushes: installationsprogrammet til Windows (`AulaSync-Setup.exe`, Inno Setup), den løse `AulaSync.exe` (til den portable udgave i winget og til IT), Mac-dmg'er (signeret med Developer ID og notariseret, når Apple-hemmelighederne findes; ellers, fx i en fork, kun ad hoc-signeret) og winget-manifester (se `packaging/`). Homebrew-cask'en (`packaging/homebrew`) prøves af i samme kørsel og lægges i tap'en `rpaasch/homebrew-tap`, når AulaSync er udgivet. Ikonet tegnes af `packaging/icon/make-icons.py`.
 
 ## Ansvarsfraskrivelse
 
