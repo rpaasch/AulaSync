@@ -1,0 +1,40 @@
+# Skærmbillederne af AulaSync til hjemmesiden og README'en (docs/billeder). Appen tegner tekst med styresystemets skrift,
+# så de tegnes på en Mac og en Windows-maskine (tests/AulaSync.App.Tests/Skaermbilleder.cs) og lægges som artefakter;
+# kopiér dem selv ind i docs/billeder. Kører, når generatoren ændres, eller i hånden (Actions › Skærmbilleder).
+name: Skærmbilleder
+
+on:
+  push:
+    branches: ['**']
+    paths: ['tests/AulaSync.App.Tests/Skaermbilleder.cs', '.github/workflows/skaermbilleder.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  billeder:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Tegn skærmbillederne
+        shell: bash
+        env:
+          AULASYNC_SKAERMBILLEDER: ${{ github.workspace }}/out/billeder
+        run: dotnet test tests/AulaSync.App.Tests --filter Skaermbilleder
+      - uses: actions/upload-artifact@v7
+        with:
+          name: skaermbilleder-${{ runner.os }}
+          path: out/billeder/*.png
+          if-no-files-found: error
