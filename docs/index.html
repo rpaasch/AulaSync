@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AulaSync</title>
+<meta name="description" content="AulaSync henter skemaer fra Aula for dig selv, kolleger, klasser og lokaler og lægger dem i din kalender. Opdaterer sig selv i Apple Kalender og klassisk Outlook. Gratis til Windows og Mac.">
+<meta property="og:title" content="AulaSync: skemaerne fra Aula i din kalender">
+<meta property="og:description" content="Skemaer for dig selv, kolleger, klasser og lokaler i din kalender. Opdaterer sig selv i Apple Kalender og klassisk Outlook. Gratis til Windows og Mac.">
+<meta property="og:image" content="https://rpaasch.github.io/AulaSync/billeder/social.png">
+<meta property="og:url" content="https://rpaasch.github.io/AulaSync/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="da_DK">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="billeder/favicon.png">
+<link rel="apple-touch-icon" href="billeder/ikon.png">
+<style>
+/* Billederne er appens egne vinduer, tegnet af tests/AulaSync.App.Tests/Skaermbilleder.cs på Windows og Mac med opdigtede
+   data. Siden viser Windows-billederne og skifter til Mac-billederne på en Mac (og med knapperne i Sådan virker det).
+   Kvadreret papir bag helten; den blå er appens farve for medarbejdere. */
+@font-face { font-family: "Bricolage Grotesque"; src: url("fonts/bricolage-grotesque.woff2") format("woff2"); font-weight: 400 800; font-display: swap; }
+@font-face { font-family: "Schibsted Grotesk"; src: url("fonts/schibsted-grotesk.woff2") format("woff2"); font-weight: 400 900; font-display: swap; }
+
+:root {
+  --paper: #f7f9fc;
+  --surface: #ffffff;
+  --sunken: #eef2f8;
+  --ink: #131a2b;
+  --muted: #55607a;
+  --line: #dbe2ee;
+  --grid: rgba(42, 99, 217, 0.075);
+  --accent: #2a63d9;
+  --accent-strong: #1d4cb3;
+  --on-accent: #ffffff;
+  --emp: #e3ecfc;  --emp-ink: #1f4fa8;
+  --sub: #fff0d4;  --sub-ink: #8a5200;
+  --ok: #1e8a4c;
+  --shadow: 0 1px 2px rgba(19, 26, 43, 0.06), 0 18px 40px -16px rgba(19, 26, 43, 0.28);
+  --display: "Bricolage Grotesque", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --body: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  --radius: 14px;
+  --wrap: 1120px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0d1321; --surface: #141c2e; --sunken: #101827; --ink: #e6ebf5; --muted: #9ba7bd; --line: #26314a;
+    --grid: rgba(110, 157, 255, 0.07); --accent: #6e9dff; --accent-strong: #9cbcff; --on-accent: #0b1220;
+    --emp: #1b2a4a; --emp-ink: #b0c9ff;
+    --sub: #3a2a10; --sub-ink: #f3c776; --ok: #4cc883;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 44px -14px rgba(0, 0, 0, 0.7);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0d1321; --surface: #141c2e; --sunken: #101827; --ink: #e6ebf5; --muted: #9ba7bd; --line: #26314a;
+  --grid: rgba(110, 157, 255, 0.07); --accent: #6e9dff; --accent-strong: #9cbcff; --on-accent: #0b1220;
+  --emp: #1b2a4a; --emp-ink: #b0c9ff;
+  --sub: #3a2a10; --sub-ink: #f3c776; --ok: #4cc883;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 44px -14px rgba(0, 0, 0, 0.7);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; animation: none !important; } }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 17px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { color: var(--accent-strong); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.08; letter-spacing: -0.02em; text-wrap: balance; margin: 0; }
+h2 { font-size: clamp(30px, 4.4vw, 46px); font-weight: 750; }
+h3 { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; }
+p { margin: 0; }
+.wrap { max-width: var(--wrap); margin-inline: auto; padding-inline: 20px; }
+.eyebrow { font: 600 13px/1.3 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lead { font-size: 19px; color: var(--muted); max-width: 60ch; }
+.section { padding-block: clamp(64px, 9vw, 112px); }
+.section-head { display: grid; gap: 14px; align-content: start; margin-bottom: 44px; max-width: 760px; }
+
+/* Navigation */
+.nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--paper) 86%, transparent); backdrop-filter: saturate(1.4) blur(12px); border-bottom: 1px solid var(--line); }
+.nav .wrap { display: flex; align-items: center; gap: 24px; min-height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; font: 750 20px/1 var(--display); color: var(--ink); text-decoration: none; letter-spacing: -0.02em; }
+.brand img { width: 32px; height: 32px; }
+.nav-links { display: flex; gap: 22px; margin-left: auto; }
+.nav-links a { color: var(--muted); text-decoration: none; font-weight: 500; font-size: 15px; }
+.nav-links a:hover { color: var(--ink); }
+@media (max-width: 860px) { .nav-links { display: none; } .nav .btn { margin-left: auto; } }
+
+/* Knapper */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 22px; border-radius: 12px; font: 600 16px/1 var(--body); text-decoration: none; border: 1px solid transparent; cursor: pointer; transition: transform 0.15s ease, background 0.15s ease; }
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--accent); color: var(--on-accent); }
+.btn-primary:hover { background: var(--accent-strong); color: var(--on-accent); }
+.btn-ghost { background: var(--surface); color: var(--ink); border-color: var(--line); }
+.btn-ghost:hover { color: var(--ink); border-color: var(--muted); }
+.btn-small { min-height: 40px; padding: 0 16px; font-size: 15px; border-radius: 10px; }
+.btn svg { width: 18px; height: 18px; flex: none; }
+
+/* Helt */
+.hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); background-color: var(--paper);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px; background-position: -1px -1px; }
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); gap: clamp(32px, 5vw, 64px); align-items: center; padding-block: clamp(48px, 7vw, 96px); }
+.hero-copy { display: grid; gap: 22px; min-width: 0; }
+.hero h1 { font-size: clamp(40px, 6.2vw, 72px); font-weight: 800; letter-spacing: -0.035em; }
+.hero h1 span { color: var(--accent); display: block; }
+.hero .lead { font-size: clamp(18px, 1.8vw, 20px); }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--muted); font-size: 14px; }
+.meta span { display: inline-flex; align-items: center; gap: 7px; }
+.meta span::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.indie { font-size: 13.5px; color: var(--muted); border-left: 3px solid var(--line); padding-left: 10px; }
+@media (max-width: 960px) { .hero .wrap { grid-template-columns: minmax(0, 1fr); } }
+
+/* Skærmbilledet i helten */
+.hero-shot { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
+.hero-shot picture { display: block; }
+.hero-shot img { width: 100%; }
+
+/* Tillidslinje */
+.trust { border-bottom: 1px solid var(--line); background: var(--surface); }
+.trust ul { list-style: none; margin: 0; padding-block: 18px; display: flex; flex-wrap: wrap; gap: 10px 32px; justify-content: center; }
+.trust li { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 500; color: var(--muted); }
+.trust svg { width: 18px; height: 18px; color: var(--accent); flex: none; }
+
+/* Til hvem */
+.roles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.role { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+.role .who { font: 600 13px/1.3 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.role p { color: var(--muted); }
+@media (max-width: 900px) { .roles { grid-template-columns: minmax(0, 1fr); } }
+
+/* Trin */
+.steps { display: grid; gap: clamp(40px, 6vw, 72px); }
+.step { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(24px, 5vw, 64px); align-items: center; }
+.step:nth-child(even) { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); }
+.step:nth-child(even) .step-copy { order: 2; }
+.step-copy { display: grid; gap: 14px; min-width: 0; }
+.step-no { font: 800 15px/1 var(--display); color: var(--accent); display: inline-flex; align-items: center; gap: 10px; }
+.step-no::before { content: attr(data-n); display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--emp); color: var(--emp-ink); font-size: 16px; }
+.step-copy p { color: var(--muted); max-width: 52ch; }
+.shot { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; min-width: 0; }
+.shot img { width: 100%; }
+.os-switch { justify-self: start; display: inline-flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.os-switch[hidden] { display: none; }
+.os-switch span { color: var(--muted); font-size: 14px; padding: 0 8px 0 10px; }
+.os-switch button { font: 600 14px/1 var(--body); color: var(--muted); background: none; border: 0; border-radius: 9px; padding: 10px 14px; cursor: pointer; }
+.os-switch button:hover { color: var(--ink); }
+.os-switch button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+@media (max-width: 860px) { .step, .step:nth-child(even) { grid-template-columns: minmax(0, 1fr); } .step:nth-child(even) .step-copy { order: 0; } }
+
+/* I kalenderen */
+.points { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.points li { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; display: grid; gap: 8px; align-content: start; min-width: 0; color: var(--muted); font-size: 16px; }
+.points li > b { color: var(--ink); font: 700 19px/1.25 var(--display); }
+.points li span b { color: var(--ink); }
+.mono { font-family: var(--mono); font-size: 0.92em; white-space: nowrap; }
+.ex { justify-self: start; font: 500 14px/1.5 var(--mono); color: var(--ink); background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; }
+@media (max-width: 900px) { .points { grid-template-columns: minmax(0, 1fr); } }
+
+/* Funktioner */
+.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.feature { background: var(--surface); padding: 26px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.feature svg { width: 26px; height: 26px; color: var(--accent); }
+.feature p { color: var(--muted); font-size: 16px; }
+@media (max-width: 900px) { .features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .features { grid-template-columns: minmax(0, 1fr); } }
+
+/* Kalenderprogrammer */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.apps { width: 100%; border-collapse: collapse; font-size: 16px; min-width: 560px; }
+.apps th, .apps td { text-align: left; padding: 14px 18px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.apps th { font: 600 13px/1.3 var(--body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); background: var(--sunken); }
+.apps tr:last-child td { border-bottom: 0; }
+.apps td:first-child { font-weight: 600; }
+.apps td { color: var(--muted); } .apps td:first-child { color: var(--ink); }
+.note { margin-top: 22px; padding: 16px 20px; border-radius: 12px; background: var(--sunken); color: var(--muted); font-size: 15.5px; border: 1px solid var(--line); }
+.note b { color: var(--ink); }
+
+/* Data og sikkerhed */
+.safe { background: var(--surface); border-block: 1px solid var(--line); }
+.safe-grid { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: clamp(28px, 5vw, 72px); }
+.safe-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; }
+.safe-list li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 16px; }
+.safe-list .ico { width: 40px; height: 40px; border-radius: 10px; background: var(--emp); color: var(--emp-ink); display: grid; place-items: center; }
+.safe-list svg { width: 21px; height: 21px; }
+.safe-list h3 { font-size: 18px; margin-bottom: 4px; }
+.safe-list p { color: var(--muted); font-size: 16px; }
+.warning { margin-top: 28px; padding: 18px 20px; border-radius: 12px; background: var(--sub); color: var(--sub-ink); font-size: 15.5px; }
+@media (max-width: 860px) { .safe-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Hent */
+.downloads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.dl { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: clamp(24px, 3.5vw, 34px); display: grid; gap: 16px; align-content: start; min-width: 0; }
+.dl-head { display: flex; align-items: center; gap: 14px; }
+.dl-head svg { width: 34px; height: 34px; color: var(--ink); flex: none; }
+.dl-head h3 { font-size: 26px; }
+.dl-head small { display: block; color: var(--muted); font: 400 14px/1.3 var(--body); letter-spacing: 0; margin-top: 4px; }
+.dl p { color: var(--muted); font-size: 15.5px; }
+.dl .btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.cmd { display: flex; align-items: center; gap: 8px; background: var(--sunken); border: 1px solid var(--line); border-radius: 10px; padding: 6px 6px 6px 14px; min-width: 0; }
+.cmd code { font: 500 14px/1.4 var(--mono); overflow-x: auto; white-space: nowrap; flex: 1; min-width: 0; padding-block: 6px; }
+.cmd button { flex: none; font: 600 13px/1 var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 11px; cursor: pointer; }
+.cmd button:hover { border-color: var(--muted); }
+.small { font-size: 14px !important; }
+@media (max-width: 860px) { .downloads { grid-template-columns: minmax(0, 1fr); } }
+
+/* Spørgsmål */
+.faq { display: grid; gap: 10px; max-width: 860px; }
+.faq details { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 0 22px; }
+.faq summary { cursor: pointer; list-style: none; padding-block: 18px; font: 650 18px/1.35 var(--display); display: flex; justify-content: space-between; gap: 16px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; font: 400 24px/1 var(--body); color: var(--muted); }
+.faq details[open] summary::after { content: "–"; }
+.faq details > div { padding-bottom: 20px; color: var(--muted); display: grid; gap: 10px; max-width: 70ch; }
+
+/* Fod */
+footer { border-top: 1px solid var(--line); padding-block: 40px 56px; color: var(--muted); font-size: 14.5px; }
+footer .wrap { display: grid; gap: 18px; }
+footer nav { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+footer nav a { color: var(--ink); text-decoration: none; font-weight: 500; }
+footer nav a:hover { text-decoration: underline; }
+footer p { max-width: 90ch; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="billeder/ikon.png" alt="" width="32" height="32">AulaSync</a>
+    <nav class="nav-links" aria-label="Sektioner">
+      <a href="#til-hvem">Til hvem</a>
+      <a href="#saadan">Sådan virker det</a>
+      <a href="#sikkerhed">Data og sikkerhed</a>
+      <a href="#spoergsmaal">Spørgsmål</a>
+    </nav>
+    <a class="btn btn-primary btn-small" href="#hent">Hent gratis</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-copy">
+        <p class="eyebrow">Til skolens medarbejdere · Windows og Mac · Gratis</p>
+        <h1>Skemaerne fra Aula. <span>Lige i din kalender.</span></h1>
+        <p class="lead">AulaSync henter skemaer for dig selv, dine kolleger, klasser og lokaler fra Aula og lægger dem i din kalender. I Apple Kalender og klassisk Outlook opdaterer de sig selv, så ændringer og vikarer kommer med.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/rpaasch/AulaSync/releases/latest/download/AulaSync-Setup.exe">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5 10.5 4.4v7.1H3V5.5Zm0 13 7.5 1.1v-7.1H3v6Zm8.5 1.3L21 21v-8.5h-9.5v7.3Zm0-15.6v7.3H21V3l-9.5 1.2Z"/></svg>
+            Hent til Windows</a>
+          <a class="btn btn-ghost" href="#hent-mac">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.8-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.8 1.2 1.8 2.6 3.1 2.5 1.3-.1 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.5.9-1.4 1.3-2.7 1.3-2.8 0 0-2.6-1-2.6-4.1ZM13.9 4.9c.7-.8 1.1-1.9 1-3-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.9-1.4Z"/></svg>
+            Hent til Mac</a>
+        </div>
+        <div class="meta"><span>Gratis</span><span>Windows 10 og 11</span><span>macOS 15 eller nyere</span><span>Åben kildekode</span></div>
+        <p class="indie">Et uafhængigt projekt. Ikke tilknyttet Aula, KOMBIT, Netcompany eller KMD.</p>
+      </div>
+
+      <div class="hero-shot">
+        <picture data-os><source srcset="billeder/mine-skemaer-windows-moerk.png" media="(prefers-color-scheme: dark)"><img src="billeder/mine-skemaer-windows.png" width="1120" height="830" data-windows="1120x830" data-mac="1120x790" alt="AulaSyncs vindue Mine skemaer med fem skemaer: AE Anna Eksempel, 7A, 8B, Lokale 53 og BT Bo Testesen, alle tilføjet. Nederst: Opdateret i dag 14:00, næste 18:00, og knappen Opdatér nu."></picture>
+      </div>
+    </div>
+  </section>
+
+  <section class="trust" aria-label="Kort fortalt">
+    <ul class="wrap">
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Kører på din computer</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6l-8-3Z"/></svg>Taler kun med Aula</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>Gratis, ingen konto</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5"/></svg>Åben kildekode</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM3.5 9h17M3.5 15h17"/></svg>Uafhængigt projekt</li>
+    </ul>
+  </section>
+
+  <section class="section" id="til-hvem">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Til hvem</p>
+        <h2>Til alle, der planlægger efter skemaet</h2>
+        <p class="lead">Du vælger selv, hvilke skemaer du vil følge. Hvert skema bliver sin egen kalender, som du kan slå til og fra i dit kalenderprogram.</p>
+      </div>
+      <div class="roles">
+        <article class="role">
+          <p class="who">Skolesekretær og kontor</p>
+          <h3>Lokaler og vikarer i samme kalender som dine egne aftaler</h3>
+          <p>Følg lokalerne og de kolleger, du planlægger for. Har en lektion fået vikar, står der "Vikar" først i titlen, og beskrivelsen viser, hvem vikaren dækker for.</p>
+        </article>
+        <article class="role">
+          <p class="who">Medarbejdere</p>
+          <h3>Dit skema ved siden af møder og forældresamtaler</h3>
+          <p>Lærere, pædagoger, inklusionsmedarbejdere og alle andre med et skema i Aula. Dine lektioner og dine klassers skemaer kommer i den kalender, du allerede bruger.</p>
+        </article>
+        <article class="role">
+          <p class="who">Ledelse</p>
+          <h3>Overblik, når du finder tid til møder og samtaler</h3>
+          <p>Læg medarbejdere, klasser og lokaler ind som hver sin kalender, og se dem side om side, når du planlægger møder, samtaler og arrangementer.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="saadan" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Sådan virker det</p>
+        <h2>Klar på få minutter</h2>
+        <p class="lead">Første gang guider AulaSync dig igennem det hele. Bagefter kører den stille i baggrunden og starter selv, når du logger ind på computeren.</p>
+        <div class="os-switch" role="group" aria-label="Vis skærmbilleder fra" hidden>
+          <span aria-hidden="true">Vis fra</span>
+          <button type="button" data-show-os="windows" aria-pressed="true">Windows</button>
+          <button type="button" data-show-os="mac" aria-pressed="false">Mac</button>
+        </div>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-copy">
+            <p class="step-no" data-n="1">Log ind</p>
+            <h3>Log ind på Aula, som du plejer</h3>
+            <p>Du logger ind på Aulas egen login-side med MitID, UniLogin eller din kommunes login. AulaSync gemmer ikke din adgangskode.</p>
+          </div>
+          <div class="shot"><picture data-os><source srcset="billeder/velkommen-windows-moerk.png" media="(prefers-color-scheme: dark)"><img src="billeder/velkommen-windows.png" width="1200" height="960" data-windows="1200x960" data-mac="1200x960" alt="AulaSyncs første trin: Velkommen til AulaSync. AulaSync henter skemaer fra Aula og holder dem opdateret i din kalender. Den taler kun med Aula og gemmer alt på din computer. Knappen Log ind med Aula." loading="lazy"></picture></div>
+        </div>
+        <div class="step">
+          <div class="step-copy">
+            <p class="step-no" data-n="2">Vælg kalenderprogram</p>
+            <h3>Vælg det kalenderprogram, du bruger</h3>
+            <p>Apple Kalender, klassisk Outlook, ny Outlook eller et andet program. AulaSync og kalenderprogrammet skal køre på samme computer, og du kan altid ændre valget i Indstillinger.</p>
+          </div>
+          <div class="shot"><picture data-os><source srcset="billeder/kalenderprogram-windows-moerk.png" media="(prefers-color-scheme: dark)"><img src="billeder/kalenderprogram-windows.png" width="1200" height="1118" data-windows="1200x1118" data-mac="1200x922" alt="Trinnet Hvilket kalenderprogram bruger du? med fire kort. Outlook (klassisk) er valgt. Apple Kalender, Outlook (klassisk) og Andet program opdateres automatisk; Ny Outlook, Outlook til Mac eller web er et øjebliksbillede. Nederst en hjælp til at se, om du har ny Outlook, og knapperne Fortsæt og Tilbage." data-alt-windows="Trinnet Hvilket kalenderprogram bruger du? med fire kort. Outlook (klassisk) er valgt. Apple Kalender, Outlook (klassisk) og Andet program opdateres automatisk; Ny Outlook, Outlook til Mac eller web er et øjebliksbillede. Nederst en hjælp til at se, om du har ny Outlook, og knapperne Fortsæt og Tilbage." data-alt-mac="Trinnet Hvilket kalenderprogram bruger du? med fire kort. Apple Kalender er valgt. Apple Kalender, Outlook (klassisk) og Andet program opdateres automatisk; Ny Outlook, Outlook til Mac eller web er et øjebliksbillede. Knapperne Tilbage og Fortsæt." loading="lazy"></picture></div>
+        </div>
+        <div class="step">
+          <div class="step-copy">
+            <p class="step-no" data-n="3">Vælg skemaer</p>
+            <h3>Søg på navn, initialer, klasse eller lokale</h3>
+            <p>Dit eget skema er valgt på forhånd. Tilføj kolleger, klasser og lokaler, og tilføj flere senere, når du får brug for dem.</p>
+          </div>
+          <div class="shot"><picture data-os><source srcset="billeder/vaelg-skemaer-windows-moerk.png" media="(prefers-color-scheme: dark)"><img src="billeder/vaelg-skemaer-windows.png" width="1200" height="1470" data-windows="1200x1470" data-mac="1200x1374" alt="Trinnet Vælg skemaer med søgefelt, filtrene Alle, Medarbejdere, Klasser og Lokaler og listerne over dem. AE Anna Eksempel, BT Bo Testesen, 7A, 8B og Lokale 53 er tilføjet; 9C og Gymnastiksal har knappen Tilføj." loading="lazy"></picture></div>
+        </div>
+        <div class="step">
+          <div class="step-copy">
+            <p class="step-no" data-n="4">Tilføj til kalenderen</p>
+            <h3>Klik knappen ved hvert skema</h3>
+            <p>Knappen passer til dit program, fx Tilføj til Outlook eller Tilføj til Kalender. Bagefter kører AulaSync videre i baggrunden og henter skemaerne fra Aula hver 4. time. I Indstillinger kan du vælge alt fra hver halve time til hver 8. time, og du kan altid klikke Opdatér nu.</p>
+          </div>
+          <div class="shot"><picture data-os><source srcset="billeder/tilfoej-til-kalender-windows-moerk.png" media="(prefers-color-scheme: dark)"><img src="billeder/tilfoej-til-kalender-windows.png" width="1200" height="954" data-windows="1200x954" data-mac="1200x956" alt="Trinnet Tilføj til din kalender. AE Anna Eksempel og 7A er tilføjet; 8B, Lokale 53 og BT Bo Testesen har knappen Tilføj til Outlook. Nederst: Når du klikker Færdig, kører AulaSync videre i systembakken." data-alt-windows="Trinnet Tilføj til din kalender. AE Anna Eksempel og 7A er tilføjet; 8B, Lokale 53 og BT Bo Testesen har knappen Tilføj til Outlook. Nederst: Når du klikker Færdig, kører AulaSync videre i systembakken." data-alt-mac="Trinnet Tilføj til din kalender. AE Anna Eksempel og 7A er tilføjet; 8B, Lokale 53 og BT Bo Testesen har knappen Tilføj til Kalender. Nederst: Når Kalender spørger, så vælg Placering: På min Mac (ikke iCloud)." loading="lazy"></picture></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">I kalenderen</p>
+        <h2>Hver lektion fortæller, hvad du skal vide</h2>
+        <p class="lead">Det vigtigste står i titlen. Åbner du lektionen, står resten i beskrivelsen.</p>
+      </div>
+      <ul class="points">
+        <li><b>Fag, lokale og klasse i titlen</b><span>Som de står i Aula, fx:</span><code class="ex">Dansk | Lokale&nbsp;53 | 7A</code><span>I en klasses skema står lokale og lærerens initialer i stedet, og i et lokales skema klasse og initialer.</span></li>
+        <li><b>Vikartimer er mærket i titlen</b><span>En vikartime hedder fx:</span><code class="ex">Vikar | Dansk | Lokale&nbsp;53 | 7A</code><span>I beskrivelsen står, hvem vikaren dækker for, fx Vikar for: Anna Eksempel (AE).</span></li>
+        <li><b>Se, hvornår skemaet sidst blev hentet</b><span>Slår du <b>Vis opdateringstid i kalenderen</b> til i AulaSyncs Indstillinger, får hver kalender en privat aftale mandag kl. 5.45. Den viser, hvornår skemaet sidst blev hentet fra Aula, fx:</span><code class="ex">Opd. 121026@05:30</code><span>Det betyder 12. oktober 2026 kl. 5.30.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Det får du</p>
+        <h2>Lavet til en travl skoledag</h2>
+      </div>
+      <div class="features">
+        <div class="feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+          <h3>Hver sit skema, hver sin kalender</h3>
+          <p>Medarbejdere, klasser og lokaler bliver hver sin kalender, som du slår til og fra i kalenderprogrammet.</p>
+        </div>
+        <div class="feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>
+          <h3>Opdaterer sig selv</h3>
+          <p>AulaSync henter ændringer fra Aula, og i Apple Kalender og klassisk Outlook kommer de selv med. Du vælger, hvor tit AulaSync henter: fra hver halve time til hver 8. time.</p>
+        </div>
+        <div class="feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+          <h3>Kører i baggrunden</h3>
+          <p>AulaSync ligger som et lille ikon i menulinjen på Mac og ved uret på Windows, og den starter selv, når du logger ind.</p>
+        </div>
+        <div class="feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.6 17.2A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.8L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+          <h3>Siger til, når noget kræver dig</h3>
+          <p>Fx når du skal logge ind på Aula igen, eller når et importeret skema er ændret. I vinduet kan du se, hvis dit kalenderprogram ikke har hentet et skema.</p>
+        </div>
+        <div class="feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+          <h3>Nem at installere</h3>
+          <p>På Windows uden administratorrettigheder, også med winget. På Mac signeret og undersøgt af Apple, også med Homebrew.</p>
+        </div>
+        <div class="feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+          <h3>Nem at fjerne igen</h3>
+          <p>Knappen Afinstallér AulaSync… i AulaSyncs Indstillinger fjerner programmet, dit login, dine indstillinger og kalenderfilerne. På Mac flyttes programmet til papirkurven. Kalenderne i dit kalenderprogram sletter du selv.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="kalenderprogrammer" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Kalenderprogrammer</p>
+        <h2>Virker med den kalender, du har</h2>
+      </div>
+      <div class="table-wrap">
+        <table class="apps">
+          <thead><tr><th scope="col">Kalenderprogram</th><th scope="col">Knappen i AulaSync</th><th scope="col">Opdateres</th></tr></thead>
+          <tbody>
+            <tr><td>Apple Kalender (Mac)</td><td>Tilføj til Kalender</td><td>Automatisk</td></tr>
+            <tr><td>Outlook (klassisk) på Windows</td><td>Tilføj til Outlook</td><td>Automatisk</td></tr>
+            <tr><td>Ny Outlook, Outlook til Mac og Outlook på nettet</td><td>Importér…</td><td>Ikke automatisk (øjebliksbillede). AulaSync siger til, når skemaet er ændret, så du kan importere igen.</td></tr>
+            <tr><td>Andet program på samme computer, fx Thunderbird</td><td>Kopiér adresse</td><td>Automatisk</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note"><b>AulaSync og kalenderprogrammet skal køre på samme computer.</b> Skemaerne vises på den computer, hvor AulaSync kører, ikke på telefonen. Importerer du i ny Outlook eller Outlook på nettet, kan du også se skemaet på telefonen, men så opdateres det ikke af sig selv.</p>
+    </div>
+  </section>
+
+  <section class="section safe" id="sikkerhed">
+    <div class="wrap safe-grid">
+      <div class="section-head" style="margin-bottom:0">
+        <p class="eyebrow">Data og sikkerhed</p>
+        <h2>Dine data bliver på din computer</h2>
+        <p class="lead">AulaSync taler kun med Aula og sender ikke dine data andre steder hen. Der er ingen statistik og ingen reklamer. Koden ligger åbent på GitHub, så alle kan se, hvad programmet gør.</p>
+      </div>
+      <div>
+        <ul class="safe-list">
+          <li><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>
+            <div><h3>Alt gemmes lokalt</h3><p>Skemaer, indstillinger og dit login ligger på din computer.</p></div></li>
+          <li><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+            <div><h3>Ingen adgangskode gemt</h3><p>Du logger ind på Aulas egen login-side. AulaSync husker dit login, så du ikke skal logge ind hver gang.</p></div></li>
+          <li><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6l-8-3Z"/></svg></span>
+            <div><h3>Kun på din computer</h3><p>Kalenderprogrammet henter skemaerne fra en lille kalender-server i AulaSync på din egen computer. Andre computere kan ikke nå den, og hjemmesider i din browser kan ikke læse skemaerne. Andre brugere, der er logget ind på samme computer, kan dog hente dem.</p></div></li>
+        </ul>
+        <p class="warning"><b>Husk:</b> Kalenderne indeholder oplysninger om dine kolleger, fx navne, initialer og hvem der er vikar for hvem. Følg din skoles og kommunes regler for, hvor de må ligge. Det gælder også, når du importerer et skema i ny Outlook, Outlook til Mac eller Outlook på nettet, som gemmer det hos Microsoft.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="hent">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Hent AulaSync</p>
+        <h2>Gratis til Windows og Mac</h2>
+        <p class="lead">AulaSync er gratis og et uafhængigt projekt, der ikke er tilknyttet Aula, KOMBIT, Netcompany eller KMD. Du skal kunne logge ind på Aula som medarbejder. Hele vejledningen står på <a href="https://github.com/rpaasch/AulaSync/blob/master/docs/vejledning.md">GitHub</a>.</p>
+      </div>
+      <div class="downloads">
+        <article class="dl" id="hent-windows">
+          <div class="dl-head">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5 10.5 4.4v7.1H3V5.5Zm0 13 7.5 1.1v-7.1H3v6Zm8.5 1.3L21 21v-8.5h-9.5v7.3Zm0-15.6v7.3H21V3l-9.5 1.2Z"/></svg>
+            <h3>Windows<small>Windows 10 og 11, 64-bit</small></h3>
+          </div>
+          <div class="btns"><a class="btn btn-primary" href="https://github.com/rpaasch/AulaSync/releases/latest/download/AulaSync-Setup.exe">Hent AulaSync-Setup.exe</a></div>
+          <p>Åbn filen. Viser Windows "Windows beskyttede din pc", så klik Flere oplysninger og derefter Kør alligevel. Det sker, fordi programmet ikke er signeret, så Windows ikke kan se, hvem der har lavet det. Klik så Installer. AulaSync installeres kun for dig og kræver ikke administratorrettigheder.</p>
+          <p class="small">Eller med winget i Terminal:</p>
+          <div class="cmd"><code>winget install rpaasch.AulaSync</code><button type="button" data-copy="winget install rpaasch.AulaSync">Kopiér</button></div>
+        </article>
+        <article class="dl" id="hent-mac">
+          <div class="dl-head">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.8-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.8 1.2 1.8 2.6 3.1 2.5 1.3-.1 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.5.9-1.4 1.3-2.7 1.3-2.8 0 0-2.6-1-2.6-4.1ZM13.9 4.9c.7-.8 1.1-1.9 1-3-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.9-1.4Z"/></svg>
+            <h3>Mac<small>macOS 15 eller nyere</small></h3>
+          </div>
+          <div class="btns"><a class="btn btn-primary" href="https://github.com/rpaasch/AulaSync/releases/latest">Hent fra udgivelsessiden</a></div>
+          <p>På udgivelsessiden står filerne under Assets. Vælg filen, der ender på <span class="mono">arm64.dmg</span>, til Mac med Apple-chip (M1 og nyere), eller <span class="mono">x64.dmg</span> til Intel. Er du i tvivl, så vælg Om denne Mac i æblemenuen. Åbn filen, træk AulaSync over i Programmer, og åbn AulaSync derfra, ikke fra .dmg-filen. AulaSync er signeret af udvikleren og undersøgt af Apple (notariseret), så macOS spørger kun, om du vil åbne den.</p>
+          <p class="small">Eller med Homebrew i Terminal:</p>
+          <div class="cmd"><code>brew install --cask rpaasch/tap/aulasync</code><button type="button" data-copy="brew install --cask rpaasch/tap/aulasync">Kopiér</button></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="spoergsmaal" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Spørgsmål</p>
+        <h2>Godt at vide</h2>
+      </div>
+      <div class="faq">
+        <details><summary>Koster AulaSync noget?</summary><div><p>Nej. AulaSync er gratis og åben kildekode under MIT-licensen. Der er ingen konto og intet abonnement.</p></div></details>
+        <details><summary>Er AulaSync lavet af Aula eller KOMBIT?</summary><div><p>Nej. AulaSync er et uafhængigt projekt og er ikke tilknyttet, godkendt af eller støttet af Aula, KOMBIT, Netcompany eller KMD. AulaSync henter skemaerne på samme måde som Aulas egen hjemmeside, men det er ikke en officiel løsning. Ændrer Aula noget, kan AulaSync holde op med at virke fra den ene dag til den anden.</p></div></details>
+        <details><summary>Kan jeg se skemaerne på telefonen?</summary><div><p>Kun hvis du importerer dem i ny Outlook, Outlook til Mac eller Outlook på nettet. Så ligger de i din Outlook-konto hos Microsoft, men opdateres ikke af sig selv. AulaSync siger til, når et importeret skema er ændret.</p><p>I Apple Kalender og klassisk Outlook vises skemaerne på den computer, hvor AulaSync kører.</p></div></details>
+        <details><summary>Hvilke skemaer kan jeg vælge?</summary><div><p>Medarbejdere, klasser og lokaler på den institution, der står på din medarbejderprofil i Aula. Du skal kunne logge ind på Aula som medarbejder.</p></div></details>
+        <details><summary>Skal skolens IT installere den?</summary><div><p>Normalt ikke. På Windows installeres AulaSync kun for dig og kræver ikke administratorrettigheder. Har IT lukket for programmer, de ikke har godkendt, eller styrer IT din Mac, så spørg IT.</p></div></details>
+        <details><summary>Hvor tit opdateres skemaerne?</summary><div><p>AulaSync henter skemaerne fra Aula hver 4. time, så længe den kører. I Indstillinger kan du vælge alt fra hver halve time til hver 8. time, og du kan altid klikke Opdatér nu. Apple Kalender og klassisk Outlook henter dem derefter selv fra AulaSync.</p></div></details>
+        <details><summary>Hvordan fjerner jeg AulaSync igen?</summary><div><p>Vælg Afinstallér AulaSync… i AulaSyncs Indstillinger. Så fjernes programmet, start ved login, dit login, dine indstillinger, loggen og kalenderfilerne. På Mac flyttes AulaSync til papirkurven. Slet bagefter AulaSync-kalenderne i dit kalenderprogram.</p></div></details>
+        <details><summary>Jeg har fundet en fejl eller har et forslag</summary><div><p>Skriv til udvikleren på GitHub under <a href="https://github.com/rpaasch/AulaSync/issues">Issues</a>. Det kræver en gratis GitHub-konto. Alle kan læse det, du skriver, så brug opdigtede navne og initialer i stedet for rigtige.</p></div></details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <nav aria-label="Links">
+      <a href="https://github.com/rpaasch/AulaSync">AulaSync på GitHub</a>
+      <a href="https://github.com/rpaasch/AulaSync/blob/master/docs/vejledning.md">Vejledning</a>
+      <a href="https://github.com/rpaasch/AulaSync/releases">Udgivelser</a>
+      <a href="https://github.com/rpaasch/AulaSync/blob/master/LICENSE">MIT-licens</a>
+    </nav>
+    <p>AulaSync er et uafhængigt projekt med åben kildekode og er ikke tilknyttet, godkendt af eller støttet af Aula, KOMBIT, Netcompany eller KMD. Navne, klasser og lokaler på siden er opdigtede.</p>
+    <p>Siden bruger ingen cookies og sporer dig ikke.</p>
+  </div>
+</footer>
+
+<script>
+// Skærmbillederne findes fra Windows og Mac. Siden viser Windows og skifter til Mac på en Mac og med knapperne.
+(function () {
+  var buttons = document.querySelectorAll("[data-show-os]");
+  function show(os) {
+    document.querySelectorAll("picture[data-os]").forEach(function (picture) {
+      var img = picture.querySelector("img");
+      picture.querySelectorAll("source, img").forEach(function (el) {
+        var attr = el.tagName === "IMG" ? "src" : "srcset";
+        el.setAttribute(attr, el.getAttribute(attr).replace(/-(windows|mac)(-moerk)?\.png$/, "-" + os + "$2.png"));
+      });
+      var size = img.getAttribute("data-" + os).split("x");
+      img.setAttribute("width", size[0]);
+      img.setAttribute("height", size[1]);
+      var alt = img.getAttribute("data-alt-" + os);
+      if (alt) img.alt = alt;
+    });
+    buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-show-os") === os)); });
+  }
+  buttons.forEach(function (b) { b.addEventListener("click", function () { show(b.getAttribute("data-show-os")); }); });
+  document.querySelectorAll(".os-switch").forEach(function (el) { el.hidden = false; });
+  if (/Macintosh/.test(navigator.userAgent)) show("mac");
+})();
+
+document.querySelectorAll("[data-copy]").forEach(function (button) {
+  button.addEventListener("click", function () {
+    var text = button.getAttribute("data-copy");
+    var code = button.parentElement.querySelector("code");
+    function done(label) { button.textContent = label; setTimeout(function () { button.textContent = "Kopiér"; }, 1800); }
+    function select() { var range = document.createRange(); range.selectNodeContents(code); var s = getSelection(); s.removeAllRanges(); s.addRange(range); done("Markeret"); }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done("Kopieret"); }, select);
+    else select();
+  });
+});
+</script>
+</body>
+</html>
