@@ -1,5 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.Time.Testing;
+using AulaSync.Core;
+using static AulaSync.Tests.TestData;
 
 namespace AulaSync.App.Tests;
 
@@ -11,8 +13,95 @@ public class ReloginTests : IDisposable
 
     public void Dispose() => _host.Dispose();
 
-    Relogin Create(Func<CancellationToken, Task<bool>> trySilent, bool supported = true) =>
-        new(trySilent, _notifier, _host.Log, _time, supported);
+    // notice: med indstillingen i config.json (som i AulaSync); uden: én gang pr. kørsel.
+    Relogin Create(Func<CancellationToken, Task<bool>> trySilent, bool supported = true, LoggedOutNotice? notice = null)
+    {
+        if (notice is { } n) _host.Config.Save(_host.Config.Load() with { LoggedOutNotice = n });
+        return new(trySilent, _notifier, _host.Log, _time, supported, notice is null ? null : _host.Config);
+    }
+
+    // Hver dag: første besked med det samme; en ny en ny dag tidligst kl. 7 (dansk tid) efter et nyt stille genlogin, ikke
+    // samme dag. Lykkes genlogin, ingen besked, og efter et login begynder det forfra.
+    [Fact]
+    public async Task Daily_notice_comes_again_the_next_morning()
+    {
+        _time.SetLocalTimeZone(Copenhagen);
+        _time.SetUtcNow(new DateTimeOffset(2026, 11, 3, 14, 0, 0, TimeSpan.Zero)); // tirsdag 15:00
+        int attempts = 0;
+        var silent = false;
+        var relogin = Create(_ => { attempts++; return Task.FromResult(silent); }, notice: LoggedOutNotice.Daily);
+        Assert.False(await relogin.TryAsync(Relogin.ExpiredText));
+        Assert.Single(_notifier.Shown);
+
+        _time.Advance(TimeSpan.FromHours(8)); // 23:00
+        Assert.False(await relogin.RemindAsync(Relogin.ExpiredText));
+        _time.Advance(TimeSpan.FromHours(7)); // onsdag 6:00
+        Assert.False(await relogin.RemindAsync(Relogin.ExpiredText));
+        Assert.Equal((1, 1), (attempts, _notifier.Shown.Count));
+        _time.Advance(TimeSpan.FromHours(1)); // 7:00
+        Assert.False(await relogin.RemindAsync(Relogin.ExpiredText));
+        Assert.Equal((2, 2), (attempts, _notifier.Shown.Count));
+        _time.Advance(TimeSpan.FromHours(1));
+        Assert.False(await relogin.RemindAsync(Relogin.ExpiredText));
+        Assert.Equal(2, _notifier.Shown.Count);
+
+        _time.Advance(TimeSpan.FromDays(1));
+        silent = true;
+        Assert.True(await relogin.RemindAsync(Relogin.ExpiredText));
+        Assert.Equal(2, _notifier.Shown.Count);
+        Assert.Null(_host.Config.Load().LoggedOutNotifiedAt); // logget ind: forfra
+    }
+
+    // En besked om natten (før kl. 7) hører til dagen før, så morgenens besked kommer alligevel samme morgen.
+    [Fact]
+    public async Task Daily_notice_at_night_does_not_skip_the_morning()
+    {
+        _time.SetLocalTimeZone(Copenhagen);
+        _time.SetUtcNow(new DateTimeOffset(2026, 11, 4, 2, 0, 0, TimeSpan.Zero)); // onsdag 3:00
+        var relogin = Create(_ => Task.FromResult(false), notice: LoggedOutNotice.Daily);
+        await relogin.TryAsync(Relogin.ExpiredText);
+        _time.Advance(TimeSpan.FromHours(3)); // 6:00
+        await relogin.RemindAsync(Relogin.ExpiredText);
+        Assert.Single(_notifier.Shown);
+        _time.Advance(TimeSpan.FromHours(1)); // 7:00
+        await relogin.RemindAsync(Relogin.ExpiredText);
+        Assert.Equal(2, _notifier.Shown.Count);
+    }
+
+    // Én gang: kun den første besked; Ingen: aldrig en besked. Stille genlogin prøves stadig igen en ny dag.
+    [Theory]
+    [InlineData(LoggedOutNotice.Once, 1)]
+    [InlineData(LoggedOutNotice.Never, 0)]
+    public async Task Once_and_never(LoggedOutNotice notice, int shown)
+    {
+        _time.SetUtcNow(new DateTimeOffset(2026, 11, 3, 14, 0, 0, TimeSpan.Zero));
+        int attempts = 0;
+        var relogin = Create(_ => { attempts++; return Task.FromResult(false); }, notice: notice);
+        Assert.False(await relogin.TryAsync(Relogin.StartText));
+        Assert.False(await relogin.RemindAsync(Relogin.ExpiredText)); // samme dag: intet nyt forsøg
+        _time.Advance(TimeSpan.FromDays(2));
+        Assert.False(await relogin.RemindAsync(Relogin.ExpiredText));
+        Assert.False(await relogin.TryAsync(Relogin.ExpiredText));
+        Assert.Equal(shown, _notifier.Shown.Count);
+        Assert.Equal(3, attempts);
+    }
+
+    // Hvornår beskeden sidst kom, gemmes: efter en genstart (fx autostart næste morgen) kommer Én gang ikke igen, og Hver dag
+    // kun en ny dag.
+    [Theory]
+    [InlineData(LoggedOutNotice.Once, 0, 1)]
+    [InlineData(LoggedOutNotice.Daily, 0, 1)]
+    [InlineData(LoggedOutNotice.Daily, 1, 2)]
+    public async Task Notice_time_survives_a_restart(LoggedOutNotice notice, int days, int shown)
+    {
+        _time.SetLocalTimeZone(Copenhagen);
+        var start = new DateTimeOffset(2026, 11, 3, 14, 0, 0, TimeSpan.Zero); // 15:00
+        _time.SetUtcNow(start);
+        await Create(_ => Task.FromResult(false), notice: notice).TryAsync(Relogin.ExpiredText);
+        _time.SetUtcNow(days == 0 ? start.AddHours(4) : start.AddDays(days).AddHours(-4)); // 19:00 samme dag eller 11:00
+        await Create(_ => Task.FromResult(false), notice: notice).TryAsync(Relogin.StartText);
+        Assert.Equal(shown, _notifier.Shown.Count);
+    }
 
     [Fact]
     public async Task Silent_success_sends_no_notification()

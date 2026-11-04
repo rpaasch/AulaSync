@@ -18,6 +18,7 @@ public sealed class AppHost
     readonly NativeMenu _trayMenu = new();
     readonly TrayIcon _tray;
     IcsServer? _server;
+    ITimer? _reminder;
 
     // Sæt til false, hvis spiken viste, at stille genlogin ikke virker (punkt 5c); så er genlogin altid et klik.
     const bool SilentReloginSupported = true;
@@ -42,7 +43,7 @@ public sealed class AppHost
         Notifier = new NotificationBox(Platform, Log, Time);
         // Uden WebView2 Runtime kan login ikke lykkes; så vises notifikationen med det samme i stedet for efter 30 s.
         Relogin = new Relogin(ct => SilentLogin.RunAsync(Browser, Session, ct), Notifier, Log, Time,
-            SilentReloginSupported && !BrowserProfile.WebView2Missing);
+            SilentReloginSupported && !BrowserProfile.WebView2Missing, Config);
         ImportReminder = new ImportReminder(Sync, Config, Platform, Notifier, () => Windows.ShowMain(), a => Dispatcher.UIThread.Post(a));
         Uninstaller = new UninstallLauncher(ExecutablePath, OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), Autostart, Quit,
             text => Notifier.Show(text, () => { }), UninstallLauncher.StartProcess, Uninstall.RegisteredSetupDir);
@@ -96,9 +97,15 @@ public sealed class AppHost
             Relogin.SignedIn();
             _ = Sync.SyncAllAsync(_cts.Token);
         };
-        // Udløbet session: prøv stille genlogin; ellers notifikationsboksen én gang, og ikonet viser "Log ind igen…".
-        // Klik på boksen åbner login (eller første start, hvis den ikke er gennemført).
-        Sync.SessionExpired += () => Dispatcher.UIThread.Post(() => _ = Relogin.TryAsync(Relogin.ExpiredText));
+        // Udløbet session: prøv stille genlogin; ellers notifikationsboksen (Indstillinger › Besked, når du er logget ud),
+        // ikonet viser "Log ind igen…", og kalenderne siger det i opdateringstiden. Klik på boksen åbner login (eller første
+        // start, hvis den ikke er gennemført).
+        Sync.SessionExpired += () => Dispatcher.UIThread.Post(() => _ = LoggedOutAsync(Relogin.TryAsync(Relogin.ExpiredText)));
+        // Hver time, mens AulaSync er logget ud: en ny dag et nyt stille genlogin og evt. en ny besked (Relogin.RemindAsync).
+        _reminder = Time.CreateTimer(_ => Dispatcher.UIThread.Post(() =>
+        {
+            if (Config.Load().FirstRunDone && !Sync.Status.LoggedIn) _ = LoggedOutAsync(Relogin.RemindAsync(Relogin.ExpiredText));
+        }), null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
         Notifier.Clicked += Windows.ShowLogin;
         ImportReminder.Start();
         // Mac: ✕ på boksen giver fokus tilbage til det program, man arbejdede i (medmindre et AulaSync-vindue er åbent).
@@ -114,7 +121,8 @@ public sealed class AppHost
     }
 
     // Uden gennemført første start: første start. Ellers stille login med den gemte profil; lykkes det ikke, vises login.
-    // --silent (autostart): intet vindue; mangler login, sættes ikonet til "kræver handling", og notifikationsboksen vises én gang.
+    // --silent (autostart): intet vindue; mangler login, sættes ikonet til "kræver handling", og notifikationsboksen vises, som
+    // Indstillinger › Besked, når du er logget ud af Aula siger (Relogin).
     async Task ShowAtStartAsync()
     {
         if (!Config.Load().FirstRunDone)
@@ -124,7 +132,21 @@ public sealed class AppHost
             return;
         }
         if (!_silent) Windows.ShowMain();
-        if (!await Relogin.TryAsync(_silent ? Relogin.StartText : null) && !_silent) Windows.ShowLogin();
+        var relogin = Relogin.TryAsync(_silent ? Relogin.StartText : null);
+        if (!await relogin && !_silent) Windows.ShowLogin();
+        await LoggedOutAsync(relogin);
+    }
+
+    // Lykkedes stille genlogin ikke (og kører der ikke et andet forsøg), viser kalenderne, at AulaSync er logget ud
+    // (SyncService.ShowLoggedOutAsync); logget ind igen henter AulaSync skemaerne, og opdateringstiden bliver normal.
+    async Task LoggedOutAsync(Task<bool> relogin)
+    {
+        try
+        {
+            if (await relogin || Relogin.Running || Sync.Status.LoggedIn) return;
+            await Sync.ShowLoggedOutAsync();
+        }
+        catch (Exception ex) { Log.Error("Kunne ikke vise i kalenderne, at AulaSync er logget ud", ex); }
     }
 
     // Windows: genvejen AulaSync i Start-menuen peger på den exe, der kører (StartMenuShortcut). Lykkes det ikke, kører
@@ -225,6 +247,7 @@ public sealed class AppHost
         IsQuitting = true;
         Log.Info("AulaSync afsluttes");
         _cts.Cancel();
+        _reminder?.Dispose();
         _server?.Dispose();
         _channel.Dispose();
         _tray.IsVisible = false;

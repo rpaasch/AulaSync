@@ -22,15 +22,23 @@ public static class StatusText
         return s.LastSuccess is { } at ? $"{count} · opdateret {Time(at, tz)}" : count;
     }
 
+    // Logget ud af Aula: hvornår skemaerne sidst blev hentet, uden "næste" (der hentes ikke, før man logger ind).
     public static string BottomBar(SyncStatus s, DateTimeOffset now, TimeZoneInfo tz)
     {
         if (s.Progress is { } p) return $"Henter {p.Done} af {p.Total}…";
+        if (!s.LoggedIn) return s.LastSuccess is { } last ? $"Ikke opdateret siden {When(last, now, tz)}" : "Logget ud af Aula";
         var next = s.NextSync is { } n ? $" · næste {Time(n, tz)}" : "";
         if (s.LastSuccess is not { } at) return "Ikke opdateret endnu" + next;
+        return $"Opdateret {When(at, now, tz)}{next}";
+    }
+
+    // "i dag 07:30", "i går 07:30" eller "3. nov. 07:30".
+    static string When(DateTimeOffset at, DateTimeOffset now, TimeZoneInfo tz)
+    {
         var day = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(at, tz).DateTime);
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, tz).DateTime);
         var when = day == today ? "i dag" : day == today.AddDays(-1) ? "i går" : ShortDate(at, tz);
-        return $"Opdateret {when} {Time(at, tz)}{next}";
+        return $"{when} {Time(at, tz)}";
     }
 
     public static StatusLevel Level(SyncStatus s, bool serverRunning) =>
@@ -47,8 +55,15 @@ public static class StatusText
         return null;
     }
 
-    public static RowText Row(ScheduleRef schedule, ScheduleState state, DateTimeOffset? nextSync, TimeZoneInfo tz)
+    // loggedOut: logget ud af Aula; der hentes ikke og prøves ikke igen, så rækken siger, hvornår skemaet sidst blev hentet
+    // (now: i dag eller i går), eller at det hentes efter et login.
+    public static RowText Row(ScheduleRef schedule, ScheduleState state, DateTimeOffset? nextSync, TimeZoneInfo tz,
+        bool loggedOut = false, DateTimeOffset now = default)
     {
+        if (loggedOut)
+            return state.UpdatedAt is { } fetched
+                ? new($"{KindName(schedule)} · ikke opdateret siden {When(fetched, now, tz)}", false)
+                : new($"{KindName(schedule)} · hentes, når du logger ind", false);
         if (state.Error is not null && state.ErrorAt is { } failed)
         {
             var retry = nextSync is { } n ? $" · prøver igen {Time(n, tz)}" : "";

@@ -457,6 +457,88 @@ public class SyncServiceTests : IDisposable
         Assert.False(sync.ChangedSinceImport(sync.Subscriptions.Single()));
     }
 
+    // Logget ud af Aula (stille genlogin lykkedes ikke): kalenderne viser "⚠ Log ind i AulaSync · Opd. …" med tidspunktet
+    // for hentningen, også efter en genstart og på den måde, Indstillinger siger, når den ændres. Et importeret skema er
+    // stadig uændret. Logget ind igen: hentet normalt, og et skema, der ikke kunne hentes, får sin normale opdateringstid.
+    [Fact]
+    public async Task Logged_out_shows_in_the_calendars_until_fetched_again()
+    {
+        var config = new AppConfig(StatusEvent: true);
+        _time.SetLocalTimeZone(Copenhagen);
+        SyncService Create() => new(_store, _dir.File("kalendere"), new FileLog(_dir.File("log.txt")), _time, NoDelay, () => config);
+        var sync = Create();
+        sync.SetClient(_client);
+        _client.Events = (_, _, _) => [Ahead("1")];
+        await sync.AddAsync(Anna, default);
+        await sync.AddAsync(SevenA, default);
+        await sync.MarkImportedAsync(SevenA);
+        string Ics(ScheduleRef s) => File.ReadAllText(sync.FilePath(s)).Replace("\r\n ", "");
+
+        sync.SetClient(null);
+        await sync.ShowLoggedOutAsync();
+        _time.Advance(TimeSpan.FromDays(1));
+        foreach (var s in new[] { Anna, SevenA })
+        {
+            Assert.Contains("SUMMARY:⚠ Log ind i AulaSync · Opd. 130426@10:00\r\n", Ics(s));
+            Assert.DoesNotContain("SUMMARY:Opd.", Ics(s));
+        }
+        Assert.False(sync.ChangedSinceImport(sync.Subscriptions.Single(x => x.Key == SevenA.Key)));
+        Assert.Equal(Start, Create().StateOf(SevenA).UpdatedAt); // hentet, ikke skrevet om
+
+        // Indstillingen ændres, mens AulaSync er logget ud (BackgroundScheduler.SyncSoon).
+        config = config with { StatusStyle = StatusStyle.InDescription };
+        await sync.SyncAllAsync(default);
+        Assert.Contains("\\n\\n⚠ Log ind i AulaSync · Opd. 130426@10:00\r\n", Ics(Anna));
+        Assert.DoesNotContain("aulasync-status", Ics(Anna));
+
+        // Logget ind igen: 7A kan ikke hentes, Anna kan.
+        _client.Events = (s, _, _) => s.Kind == ScheduleKind.Group ? throw new InvalidOperationException("fejl") : [Ahead("1")];
+        sync.SetClient(_client);
+        await sync.SyncAllAsync(default);
+        Assert.Contains("\\n\\nOpd. 140426@10:00\r\n", Ics(Anna));
+        Assert.Contains("\\n\\nOpd. 130426@10:00\r\n", Ics(SevenA));
+        Assert.DoesNotContain("Log ind i AulaSync", Ics(SevenA));
+    }
+
+    // Logget ind igen, men uden forbindelse til Aula: de skemaer, der ikke nås, står heller ikke længere med "Log ind i AulaSync".
+    [Fact]
+    public async Task Offline_after_login_clears_the_warning_everywhere()
+    {
+        _time.SetLocalTimeZone(Copenhagen);
+        var sync = new SyncService(_store, _dir.File("kalendere"), new FileLog(_dir.File("log.txt")), _time, NoDelay,
+            () => new AppConfig(StatusEvent: true));
+        sync.SetClient(_client);
+        _client.Events = (_, _, _) => [Ahead("1")];
+        await sync.AddAsync(Anna, default);
+        await sync.AddAsync(SevenA, default);
+        sync.SetClient(null);
+        await sync.ShowLoggedOutAsync();
+        Assert.Contains("Log ind i AulaSync", File.ReadAllText(sync.FilePath(SevenA)).Replace("\r\n ", ""));
+
+        var tried = new List<string>();
+        _client.Events = (s, _, _) => { tried.Add(s.Key); throw new HttpRequestException("ingen forbindelse"); };
+        sync.SetClient(_client);
+        await sync.SyncAllAsync(default);
+        Assert.Equal(ConnectionState.Offline, sync.Status.Connection);
+        Assert.Equal([Anna.Key], tried.Distinct()); // 7A blev ikke forsøgt
+        foreach (var s in new[] { Anna, SevenA })
+            Assert.DoesNotContain("Log ind i AulaSync", File.ReadAllText(sync.FilePath(s)).Replace("\r\n ", ""));
+    }
+
+    // Logget ind igen, før filerne blev skrevet om: intet ændres.
+    [Fact]
+    public async Task Logged_out_is_not_shown_once_logged_in_again()
+    {
+        var sync = new SyncService(_store, _dir.File("kalendere"), new FileLog(_dir.File("log.txt")), _time, NoDelay,
+            () => new AppConfig(StatusEvent: true));
+        sync.SetClient(_client);
+        _client.Events = (_, _, _) => [Ahead("1")];
+        await sync.AddAsync(Anna, default);
+        var before = File.ReadAllText(sync.FilePath(Anna));
+        await sync.ShowLoggedOutAsync();
+        Assert.Equal(before, File.ReadAllText(sync.FilePath(Anna)));
+    }
+
     // Skemaet dækker altid 90 dage tilbage og 90 dage frem fra i dag, så perioden rykker en dag hver dag. Det er ikke en
     // ændring: kun lektionerne fra importen og frem til den sidste importerede lektion tæller.
     [Fact]

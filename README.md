@@ -130,7 +130,7 @@ Filerne ligger her:
 |---|---|
 | `kalendere/` | Én `.ics`-fil pr. skema, fx `123456-AE-medarbejder-1001.ics`: institutionens nummer, medarbejderens initialer (eller navn, hvis Aula ikke har initialer) eller klassens eller lokalets navn, typen og skemaets Aula-id |
 | `abonnementer.json` | De skemaer, du har valgt |
-| `config.json` | Kalenderprogram, første start, kalender-serverens port, hvor tit skemaerne hentes, og om opdateringstiden vises i kalenderen |
+| `config.json` | Kalenderprogram, første start, kalender-serverens port, hvor tit skemaerne hentes, om opdateringstiden vises i kalenderen, og hvor tit AulaSync giver besked, når du er logget ud af Aula |
 | `aulasync.log` | Log. Indeholder bl.a. navne og initialer på de skemaer, du har valgt, deres Aula-id'er og din institutions nummer. Højst ca. 1 MB; ældre linjer flyttes til `aulasync.log.old` |
 | `webview/` (Windows) | Login til Aula. Slettes, når du logger ud. Er mappen i brug, slettes cookies i stedet, næste gang AulaSync viser Aulas login |
 | `webview-id.txt` (Mac) | Hvilket login-lager AulaSync bruger. Selve login gemmer macOS i AulaSyncs WebKit-data uden for mappen. Når du logger ud, skifter AulaSync til et nyt, tomt lager; det gamle bruges ikke igen |

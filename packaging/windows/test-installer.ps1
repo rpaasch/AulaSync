@@ -100,6 +100,9 @@ function Install([string]$extra = '') {
     Wait-Until { (Test-Path $log) -and ((Get-Content $log -Raw) -match 'Log closed\.') } 300 'installationsprogrammet er færdigt'
     $text = Get-Content $log -Raw
     if ($text -notmatch 'Installation process succeeded') { Write-Host $text; throw 'FEJL: installationen lykkedes ikke' }
+    # Windows' Restart Manager bruges ikke (CloseApplications=no; ellers skriver Inno Setup "RestartManager" i loggen):
+    # AulaSync lukkes af installationsprogrammet selv, og intet andet program må lukkes.
+    if ($text -match 'RestartManager') { Write-Host $text; throw 'FEJL: installationsprogrammet brugte Restart Manager' }
 }
 
 try {

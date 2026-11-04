@@ -46,8 +46,10 @@ DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
-; En kørende AulaSync lukkes i PrepareToInstall; Windows' egen lukning (Restart Manager) er kun en reserve.
-CloseApplications=force
+; En kørende AulaSync lukkes i PrepareToInstall (--quit, ellers taskkill af AulaSync.exe). Windows' egen lukning (Restart
+; Manager) bruges ikke: ved en installation uden vinduer (winget) lukker den uden at spørge alle programmer, Windows mener
+; bruger filerne, og under en opdatering af en kørende AulaSync fik GitHubs runner et signal om at lukke ned.
+CloseApplications=no
 RestartApplications=no
 SetupMutex=AulaSyncSetup
 WizardStyle=modern dynamic
@@ -220,8 +222,9 @@ end;
 
 // Antal msedgewebview2.exe, der bruger AulaSyncs login (webview\, i AulaSync 2 .aulasync\webview2\): kommandolinjen
 // nævner mappen (--user-data-dir, og crashpad med --database). Edge (msedge.exe) og andre programmers WebView2 har
-// andre mapper og røres ikke; andre brugeres processer giver CommandLine = Null. Kill lukker dem. Uden WMI svares 0,
-// og sletningen prøver blot igen.
+// andre mapper og røres ikke; andre brugeres processer giver CommandLine = Null. Kill lukker dem hver for sig (også
+// renderer- og crashpad-processerne nævner mappen). Ikke taskkill /T: den finder "børn" ud fra forælderens proces-id,
+// som Windows genbruger, og kan derfor lukke helt andre programmer. Uden WMI svares 0, og sletningen prøver blot igen.
 function OurWebViews(Kill: Boolean): Integer;
 var
   Locator, Wmi, Procs, Proc: Variant;
@@ -252,7 +255,9 @@ begin
           begin
             Pid := Proc.ProcessId;
             Log(Format('Lukker WebView2-processen %d', [Pid]));
-            Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /PID ' + IntToStr(Pid), '', SW_HIDE, ewWaitUntilTerminated, Code);
+            // Kun hvis id'et stadig er en msedgewebview2.exe (det kan være genbrugt, siden listen blev hentet).
+            Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /FI "PID eq ' + IntToStr(Pid) + '" /FI "IMAGENAME eq msedgewebview2.exe"', '',
+              SW_HIDE, ewWaitUntilTerminated, Code);
           end;
         end;
       end;
