@@ -21,7 +21,7 @@ public class MainActionsTests : IDisposable
         _host.Config.Save(new AppConfig(app, Port: port));
         await _host.Sync.AddAsync(SevenA, default);
         var platform = new FakePlatform(isMac);
-        return (new MainActions(_host.Sync, _host.Config, platform, _dialogs), platform);
+        return (new MainActions(_host.Sync, _host.Config, platform, _dialogs, _host.Time), platform);
     }
 
     Subscription Sub => _host.Sync.Subscriptions.Single();
@@ -50,14 +50,19 @@ public class MainActionsTests : IDisposable
         Assert.Equal(["http://localhost:9876/klasse-88231.ics"], platform.OpenedInCalendar);
     }
 
+    // Outlook får en ny adresse ved hvert klik, så en kalender, der er slettet i Outlook, kommer igen med sit navn.
     [Fact]
-    public async Task Classic_outlook_also_shows_fallback()
+    public async Task Classic_outlook_gets_a_new_address_each_time_and_shows_fallback()
     {
         var (actions, platform) = await CreateAsync(CalendarApp.OutlookClassic, isMac: false);
         await actions.RunAsync(SevenA);
-        Assert.Equal(["webcal://localhost:9876/klasse-88231.ics"], platform.Opened);
+        _host.Time.Advance(TimeSpan.FromMinutes(5));
+        await actions.RunAsync(SevenA);
+        var at = TestHost.Start.ToUnixTimeSeconds();
+        Assert.Equal([$"webcal://localhost:9876/klasse-88231.ics?tilfoejet={at}", $"webcal://localhost:9876/klasse-88231.ics?tilfoejet={at + 300}"],
+            platform.Opened);
         Assert.Empty(platform.OpenedInCalendar);
-        Assert.Equal([SevenA], _dialogs.Fallbacks);
+        Assert.Equal([SevenA, SevenA], _dialogs.Fallbacks);
     }
 
     // Porten er brugerens egen (9877, når 9876 var optaget ved første start).
@@ -72,7 +77,7 @@ public class MainActionsTests : IDisposable
 
         _host.Config.Save(new AppConfig(CalendarApp.OutlookClassic, Port: 9877));
         await apple.RunAsync(SevenA);
-        Assert.Equal(["webcal://localhost:9877/klasse-88231.ics"], platform.Opened);
+        Assert.Equal([$"webcal://localhost:9877/klasse-88231.ics?tilfoejet={TestHost.Start.ToUnixTimeSeconds()}"], platform.Opened);
     }
 
     [Fact]
@@ -157,12 +162,13 @@ public class ImportGuideTests
         var platform = new FakePlatform(isMac: false);
         var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
         var vm = new OutlookFallbackViewModel(SevenA, 9877, platform, time);
-        Assert.Equal("http://localhost:9877/klasse-4711.ics", vm.Address);
+        var address = $"http://localhost:9877/klasse-4711.ics?tilfoejet={time.GetUtcNow().ToUnixTimeSeconds()}"; // ny for hver dialog
+        Assert.Equal(address, vm.Address);
         var copy = vm.CopyAddressCommand.ExecuteAsync(null);
         Assert.Equal("✓ Kopieret", vm.CopyLabel);
         time.Advance(TimeSpan.FromSeconds(2));
         await copy;
-        Assert.Equal(["http://localhost:9877/klasse-4711.ics"], platform.Copied);
+        Assert.Equal([address], platform.Copied);
         Assert.Equal("Kopiér adresse", vm.CopyLabel);
     }
 

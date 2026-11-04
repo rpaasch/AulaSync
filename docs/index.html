@@ -206,6 +206,10 @@ p { margin: 0; }
 .cmd button { flex: none; font: 600 13px/1 var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 11px; cursor: pointer; }
 .cmd button:hover { border-color: var(--muted); }
 .small { font-size: 14px !important; }
+.dl .alt { display: grid; gap: 12px; padding-top: 18px; border-top: 1px solid var(--line); }
+.dl h4 { margin: 0; font: 700 18px/1.3 var(--display); letter-spacing: -0.01em; }
+.howto { margin: 0; padding-left: 22px; display: grid; gap: 6px; color: var(--muted); font-size: 15.5px; }
+.howto b { color: var(--ink); }
 @media (max-width: 860px) { .downloads { grid-template-columns: minmax(0, 1fr); } }
 
 /* Spørgsmål */
@@ -362,7 +366,7 @@ footer p { max-width: 90ch; }
       <ul class="points">
         <li><b>Fag, lokale og klasse i titlen</b><span>Som de står i Aula, fx:</span><code class="ex">Dansk | Lokale&nbsp;53 | 7A</code><span>I en klasses skema står lokale og lærerens initialer i stedet, og i et lokales skema klasse og initialer.</span></li>
         <li><b>Vikartimer er mærket i titlen</b><span>En vikartime hedder fx:</span><code class="ex">Vikar | Dansk | Lokale&nbsp;53 | 7A</code><span>I beskrivelsen står, hvem vikaren dækker for, fx Vikar for: Anna Eksempel (AE).</span></li>
-        <li><b>Se, hvornår skemaet sidst blev hentet</b><span>Slår du <b>Vis opdateringstid i kalenderen</b> til i AulaSyncs Indstillinger, får hver kalender en privat aftale mandag kl. 5.45. Den viser, hvornår skemaet sidst blev hentet fra Aula, fx:</span><code class="ex">Opd. 121026@05:30</code><span>Det betyder 12. oktober 2026 kl. 5.30.</span></li>
+        <li><b>Se, hvornår skemaet sidst blev hentet</b><span>Vælger du under <b>Vis opdateringstid i kalenderen</b> i AulaSyncs Indstillinger, hvordan den skal vises, får hver kalender en privat heldagsbegivenhed eller aftale hver mandag, eller teksten nederst i hver lektion. Den viser, hvornår skemaet sidst blev hentet fra Aula, fx:</span><code class="ex">Opd. 121026@05:30</code><span>Det betyder 12. oktober 2026 kl. 5.30.</span></li>
       </ul>
     </div>
   </section>
@@ -464,9 +468,18 @@ footer p { max-width: 90ch; }
             <h3>Windows<small>Windows 10 og 11, 64-bit</small></h3>
           </div>
           <div class="btns"><a class="btn btn-primary" href="https://github.com/rpaasch/AulaSync/releases/latest/download/AulaSync-Setup.exe">Hent AulaSync-Setup.exe</a></div>
-          <p>Åbn filen. Viser Windows "Windows beskyttede din pc", så klik Flere oplysninger og derefter Kør alligevel. Det sker, fordi programmet ikke er signeret, så Windows ikke kan se, hvem der har lavet det. Klik så Installer. AulaSync installeres kun for dig og kræver ikke administratorrettigheder.</p>
-          <p class="small">Eller med winget i Terminal:</p>
-          <div class="cmd"><code>winget install rpaasch.AulaSync</code><button type="button" data-copy="winget install rpaasch.AulaSync">Kopiér</button></div>
+          <p>Åbn filen. Viser Windows "Windows beskyttede din pc", så klik Flere oplysninger og derefter Kør alligevel. Det sker, fordi programmet ikke er signeret, så Windows ikke kan se, hvem der har lavet det. Gør det kun med en <span class="mono">AulaSync-Setup.exe</span>, du selv har hentet her eller fra udgivelsessiden på GitHub. Klik så Installer. AulaSync installeres kun for dig og kræver ikke administratorrettigheder.</p>
+          <div class="alt" id="winget">
+            <h4>Eller med winget</h4>
+            <p>winget er Microsofts egen måde at installere programmer på. Du skriver én kommando, og winget henter og installerer AulaSync.</p>
+            <ol class="howto">
+              <li>Højreklik på Start-knappen, og vælg <b>Terminal</b> (på Windows 10: <b>Windows PowerShell</b>).</li>
+              <li>Kopiér kommandoen herunder, sæt den ind med Ctrl+V, og tryk Enter.</li>
+              <li>Spørger winget, om du accepterer vilkårene, så svar ja. AulaSync installeres, lægges i Start-menuen og åbner.</li>
+            </ol>
+            <div class="cmd"><code>winget install rpaasch.AulaSync</code><button type="button" data-copy="winget install rpaasch.AulaSync">Kopiér</button></div>
+            <p class="small">Ny udgave: højreklik på AulaSync-ikonet ved uret, vælg Afslut AulaSync, og skriv <span class="mono">winget upgrade rpaasch.AulaSync</span>. Start så AulaSync fra Start-menuen. En ny udgave kommer først i winget, når Microsoft har godkendt den. Siger Terminal, at winget ikke findes, så brug AulaSync-Setup.exe ovenfor.</p>
+          </div>
         </article>
         <article class="dl" id="hent-mac">
           <div class="dl-head">
@@ -475,8 +488,12 @@ footer p { max-width: 90ch; }
           </div>
           <div class="btns"><a class="btn btn-primary" href="https://github.com/rpaasch/AulaSync/releases/latest">Hent fra udgivelsessiden</a></div>
           <p>På udgivelsessiden står filerne under Assets. Vælg filen, der ender på <span class="mono">arm64.dmg</span>, til Mac med Apple-chip (M1 og nyere), eller <span class="mono">x64.dmg</span> til Intel. Er du i tvivl, så vælg Om denne Mac i æblemenuen. Åbn filen, træk AulaSync over i Programmer, og åbn AulaSync derfra, ikke fra .dmg-filen. AulaSync er signeret af udvikleren og undersøgt af Apple (notariseret), så macOS spørger kun, om du vil åbne den.</p>
-          <p class="small">Eller med Homebrew i Terminal:</p>
-          <div class="cmd"><code>brew install --cask rpaasch/tap/aulasync</code><button type="button" data-copy="brew install --cask rpaasch/tap/aulasync">Kopiér</button></div>
+          <div class="alt" id="homebrew">
+            <h4>Eller med Homebrew</h4>
+            <p>Har du <a href="https://brew.sh">Homebrew</a>, så skriv i Terminal:</p>
+            <div class="cmd"><code>brew install --cask rpaasch/tap/aulasync</code><button type="button" data-copy="brew install --cask rpaasch/tap/aulasync">Kopiér</button></div>
+            <p class="small">Homebrew henter den rigtige udgave til din Mac og lægger AulaSync i Programmer. Ny udgave: <span class="mono">brew upgrade --cask rpaasch/tap/aulasync</span>. Kører AulaSync, lukker Homebrew den og åbner den igen. Siger Homebrew <span class="mono">untrusted tap</span>, så skriv først <span class="mono">brew trust --cask rpaasch/tap/aulasync</span>.</p>
+          </div>
         </article>
       </div>
     </div>

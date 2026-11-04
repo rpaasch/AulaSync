@@ -105,6 +105,35 @@ public class BackgroundSchedulerTests : IDisposable
         await run;
     }
 
+    // Vis opdateringstid i kalenderen slået til eller fra: alle skemaer hentes med det samme, også før intervallet er gået,
+    // og flere klik lige efter hinanden giver én opdatering.
+    [Fact]
+    public async Task Sync_soon_fetches_at_once_and_coalesces()
+    {
+        var waiting = 0;
+        using var cts = new CancellationTokenSource();
+        Task Delay(TimeSpan wait, CancellationToken ct)
+        {
+            Interlocked.Increment(ref waiting);
+            return Task.Delay(Timeout.Infinite, ct);
+        }
+        var scheduler = new BackgroundScheduler(_sync, _time, _log, () => TimeSpan.FromHours(4), Delay);
+        var run = scheduler.RunAsync(cts.Token);
+        await WaitUntil(() => waiting == 1);
+        Assert.Equal(_chunksPerSync, _client.EventCalls);
+
+        _time.Advance(TimeSpan.FromMinutes(20));
+        scheduler.SyncSoon();
+        scheduler.SyncSoon(); // vækker planen en ekstra gang, men henter ikke igen
+        await WaitUntil(() => waiting >= 3);
+        Assert.Equal(2 * _chunksPerSync, _client.EventCalls);
+        Assert.Equal(Start.AddMinutes(20).AddHours(4), _sync.Status.NextSync); // næste regnes fra den nye opdatering
+        Assert.Equal(0, _client.PingCalls);
+
+        cts.Cancel();
+        await run;
+    }
+
     // Login og Opdatér nu henter også alle skemaer; næste planlagte opdatering regnes fra dem, så Aula ikke spørges igen
     // få minutter efter.
     [Fact]

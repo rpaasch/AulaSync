@@ -1,6 +1,7 @@
 <!-- Farver og former fra UI-mockuppen (docs/superpowers/specs/ui-mockup.html), i lys og mørk tilstand. -->
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:AulaSync.App">
   <Styles.Resources>
     <ResourceDictionary>
       <ResourceDictionary.ThemeDictionaries>
@@ -367,6 +368,32 @@
       <Thickness x:Key="ToggleSwitchOuterBorderStrokeThickness">0</Thickness>
 
       <!-- Valgkortene ved første start (mockup .card): hvid flade, tynd kant, blå kant og ring, når valgt -->
+      <!-- ⓘ ved en indstilling (InfoTip): et "i" i en cirkel, dæmpet; blåt, når musen er over eller den har fokus. -->
+      <ControlTheme x:Key="{x:Type app:InfoTip}" TargetType="app:InfoTip">
+        <Setter Property="Width" Value="16" />
+        <Setter Property="Height" Value="16" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource MutedBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="True" />
+        <Setter Property="Template">
+          <ControlTemplate>
+            <Border Name="Ring" CornerRadius="8" BorderThickness="1.3" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}">
+              <TextBlock Text="i" FontSize="10.5" FontWeight="Bold" Foreground="{TemplateBinding Foreground}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+          </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover, ^:focus-visible, ^:pressed">
+          <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+          <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+      </ControlTheme>
+
       <ControlTheme x:Key="CalendarCard" TargetType="RadioButton">
         <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />

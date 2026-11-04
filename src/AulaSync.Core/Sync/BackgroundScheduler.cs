@@ -16,6 +16,7 @@ public sealed class BackgroundScheduler
     readonly Func<TimeSpan, CancellationToken, Task> _delay;
     readonly SemaphoreSlim _wake = new(0, 1);
     volatile bool _syncing; // planen opdaterer selv; dens egen start skal ikke vække den
+    volatile bool _soon;    // SyncSoon: hent ved næste runde, uanset intervallet
 
     public BackgroundScheduler(SyncService sync, TimeProvider time, FileLog log, Func<TimeSpan> interval,
         Func<TimeSpan, CancellationToken, Task>? delay = null)
@@ -36,6 +37,15 @@ public sealed class BackgroundScheduler
         catch (SemaphoreFullException) { } // allerede vækket
     }
 
+    // Kalenderfilerne skal skrives igen (fx er Vis opdateringstid i kalenderen slået til eller fra): planen henter alle
+    // skemaer med det samme, eller lige efter en opdatering, der allerede kører (den har måske skrevet nogle filer med den
+    // gamle indstilling). Flere kald inden da giver én opdatering.
+    public void SyncSoon()
+    {
+        _soon = true;
+        Reschedule();
+    }
+
     public async Task RunAsync(CancellationToken ct)
     {
         var lastSync = DateTimeOffset.MinValue; // starten af planens seneste opdatering; MinValue: opdatér nu
@@ -53,8 +63,9 @@ public sealed class BackgroundScheduler
                 var asked = false;
                 try
                 {
-                    if (now >= Latest(lastSync) + interval)
+                    if (_soon || now >= Latest(lastSync) + interval)
                     {
+                        _soon = false;
                         lastSync = now; // fra starten, så hentetiden ikke lægges oven i intervallet
                         asked = true;
                         _syncing = true;

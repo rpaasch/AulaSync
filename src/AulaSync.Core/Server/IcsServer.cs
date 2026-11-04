@@ -44,9 +44,13 @@ public sealed partial class IcsServer : IDisposable
     // User-Agent ("" uden).
     public event Action<string, string>? Fetched;
 
-    public static string UrlFor(ScheduleRef schedule, int port) => $"http://localhost:{port}/{schedule.FileName}";
+    // added: et tal efter "?tilfoejet=", som serveren ser bort fra, så klassisk Outlook får en ny adresse (se MainActions).
+    // Uden: den faste adresse.
+    public static string UrlFor(ScheduleRef schedule, int port, long? added = null) => $"http://localhost:{port}/{schedule.FileName}{Added(added)}";
 
-    public static string WebcalFor(ScheduleRef schedule, int port) => $"webcal://localhost:{port}/{schedule.FileName}";
+    public static string WebcalFor(ScheduleRef schedule, int port, long? added = null) => $"webcal://localhost:{port}/{schedule.FileName}{Added(added)}";
+
+    static string Added(long? added) => added is { } n ? $"?tilfoejet={n.ToString(CultureInfo.InvariantCulture)}" : "";
 
     // Adressen er skemaets nøgle (medarbejder-1001.ics); filen på disken kan have mere foran (CalendarFiles).
     public static ServeDecision Resolve(string calendarDir, string absolutePath, string method, DateTimeOffset? ifModifiedSince)

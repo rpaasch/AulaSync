@@ -444,12 +444,14 @@ public class SyncServiceTests : IDisposable
         Assert.Contains("REFRESH-INTERVAL;VALUE=DURATION:PT1H\r\n", ics);
         Assert.DoesNotContain("aulasync-status", ics);
 
-        config = new AppConfig(UpdateMinutes: 30, StatusEvent: true);
+        config = new AppConfig(UpdateMinutes: 30, StatusEvent: true, StatusMinutes: 7 * 60);
         _time.Advance(TimeSpan.FromHours(1));
         await sync.SyncAllAsync(default);
         ics = File.ReadAllText(sync.FilePath(SevenA));
         Assert.Contains("REFRESH-INTERVAL;VALUE=DURATION:PT30M\r\n", ics);
-        Assert.Contains("UID:aulasync-status-klasse-88231@aulasync\r\n", ics);
+        // Mandag 13. april kl. 7.00 dansk sommertid (og de andre mandage i perioden).
+        Assert.Contains("UID:aulasync-status-klasse-88231-20260413@aulasync\r\n", ics);
+        Assert.Contains("DTSTART:20260413T050000Z\r\n", ics);
         Assert.Contains("SUMMARY:Opd. 130426@11:00\r\n", ics); // 9:00 UTC er 11:00 i København
         Assert.Equal(1, sync.StateOf(SevenA).Lessons);
         Assert.False(sync.ChangedSinceImport(sync.Subscriptions.Single()));

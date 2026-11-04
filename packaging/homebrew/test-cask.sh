@@ -32,6 +32,10 @@ brew tap-new --no-git aulasync/ci > /dev/null
 tap=$(brew --repository aulasync/ci)
 mkdir -p "$tap/Casks"
 cp "$cask" "$tap/Casks/aulasync.rb"
+# Fra Homebrew 6 indlæses casks fra andre taps kun, når de er betroet. Som efter brugerens brew install --cask
+# rpaasch/tap/aulasync betros kun AulaSync, ikke hele tap'en. Ældre Homebrew har ikke brew trust.
+cmds=$(brew commands --quiet)
+if grep -qx trust <<< "$cmds"; then brew trust --cask "$name"; fi
 
 echo "== brew style og audit"
 brew style --cask "$name"
@@ -110,4 +114,5 @@ if brew list --cask aulasync > /dev/null 2>&1; then fail "brew list viser stadig
 rm -rf "$HOME/.Trash/AulaSync.app" "$lib/Preferences/dk.rpaasch.aulasync.plist"
 ok "Afinstallér AulaSync… fjerner også Homebrews optegnelse"
 
+if grep -qx untrust <<< "$cmds"; then brew untrust --cask "$name" > /dev/null 2>&1 || true; fi
 brew untap aulasync/ci > /dev/null

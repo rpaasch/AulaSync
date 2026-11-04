@@ -100,7 +100,7 @@ public sealed class AppWindows(AppHost host) : IDialogs
         {
             var vm = new SettingsViewModel(host.Config, host.Autostart, host.Session, this, host.Platform, host.Paths,
                 host.SignOutAsync, () => { MainViewModel.Reload(); host.UpdateTray(); }, // prikken følger kalenderprogrammet
-                host.Scheduler.Reschedule, host.Uninstaller);
+                host.Scheduler.Reschedule, host.Scheduler.SyncSoon, host.Uninstaller);
             _settings = new SettingsWindow(vm);
             WindowChrome.Apply(_settings);
             WindowFit.CapToScreen(_settings);

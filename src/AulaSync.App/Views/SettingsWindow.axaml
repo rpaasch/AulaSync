@@ -7,10 +7,17 @@
         WindowStartupLocation="CenterScreen">
   <!-- Højst skærmens højde (WindowFit.CapToScreen); ellers kan indholdet rulles. -->
   <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Margin="18,18,18,16">
+    <StackPanel Margin="18,14,18,12">
       <StackPanel.Styles>
         <Style Selector="DockPanel.r, StackPanel.r">
-          <Setter Property="Margin" Value="0,11" />
+          <Setter Property="Margin" Value="0,8" />
+        </Style>
+        <!-- Kortene uden beskrivelse: den står ved første start og i vejledningen. -->
+        <Style Selector="app|CalendarCardsView TextBlock.desc">
+          <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="app|CalendarCardsView RadioButton">
+          <Setter Property="Padding" Value="12,8" />
         </Style>
         <Style Selector="Separator">
           <Setter Property="Margin" Value="0" />
@@ -18,8 +25,11 @@
         </Style>
       </StackPanel.Styles>
 
-      <StackPanel Classes="r" Spacing="10">
-        <TextBlock Text="Kalenderprogram" />
+      <StackPanel Classes="r" Spacing="8">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="Kalenderprogram" />
+          <app:InfoTip Text="Vælg det kalenderprogram, du bruger. Apple Kalender, Outlook (klassisk) og Andet program opdateres af sig selv, så længe AulaSync kører. Ny Outlook, Outlook til Mac og Outlook på nettet henter kalendere gennem Microsofts servere, som ikke kan nå denne computer: dér importerer du en fil, og AulaSync siger til, når skemaet er ændret. Skifter du program, ændres kun knapperne i hovedvinduet." AutomationProperties.Name="Om Kalenderprogram" />
+        </StackPanel>
         <app:CalendarCardsView />
       </StackPanel>
       <Separator />
@@ -33,29 +43,53 @@
           </ComboBox.ItemTemplate>
         </ComboBox>
         <StackPanel VerticalAlignment="Center">
-          <TextBlock Text="Hent skemaer fra Aula" />
-          <TextBlock Classes="sub" Text="Sjældnere giver færre forespørgsler til Aula. Opdatér nu henter altid med det samme." TextWrapping="Wrap" />
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Hent skemaer fra Aula" />
+            <app:InfoTip Text="Hvor tit AulaSync henter dine skemaer fra Aula, så længe AulaSync kører. Sjældnere giver færre forespørgsler til Aula. Opdatér nu i hovedvinduet henter altid med det samme." AutomationProperties.Name="Om Hent skemaer fra Aula" />
+          </StackPanel>
+          <TextBlock Classes="sub" Text="Opdatér nu henter altid med det samme." TextWrapping="Wrap" />
         </StackPanel>
       </DockPanel>
       <DockPanel Classes="r">
-        <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding StatusEvent}" OnContent="" OffContent=""
-                      VerticalAlignment="Center" AutomationProperties.Name="Vis opdateringstid i kalenderen" />
-        <StackPanel VerticalAlignment="Center">
-          <TextBlock Text="Vis opdateringstid i kalenderen" TextWrapping="Wrap" />
-          <TextBlock Classes="sub" TextWrapping="Wrap"
-                     Text="En privat aftale mandag kl. 5.45 viser, hvornår skemaet i kalenderen blev hentet fra Aula, fx &quot;Opd. 091026@07:30&quot;. Ændringen kommer med ved næste opdatering." />
+        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding StatusOptions}" SelectedItem="{Binding SelectedStatus}"
+                  VerticalAlignment="Top" Margin="12,0,0,0" AutomationProperties.Name="Vis opdateringstid i kalenderen">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="app:StatusOption">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <StackPanel VerticalAlignment="Center" Spacing="6">
+          <StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="Vis opdateringstid i kalenderen" />
+              <app:InfoTip Text="Viser i kalenderen, hvornår skemaet sidst blev hentet fra Aula, fx &quot;Opd. 091026@07:30&quot; for 9. oktober 2026 kl. 7.30. Heldagsbegivenheden og aftalen står privat hver mandag og optager ikke tid. Ved &quot;I hver lektions beskrivelse&quot; står tidspunktet nederst i hver lektion. Når du ændrer valget, henter AulaSync skemaerne med det samme, og kalenderen viser det, næste gang kalenderprogrammet henter skemaet." AutomationProperties.Name="Om Vis opdateringstid i kalenderen" />
+            </StackPanel>
+            <TextBlock Classes="sub" TextWrapping="Wrap" Text="Fx &quot;Opd. 091026@07:30&quot;." />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsTimedStatus}">
+            <TextBlock Text="Mandag kl." VerticalAlignment="Center" />
+            <TimePicker SelectedTime="{Binding StatusTime}" ClockIdentifier="24HourClock" MinuteIncrement="5" MinWidth="0" Width="140"
+                        AutomationProperties.Name="Klokkeslæt for opdateringstiden hver mandag" />
+          </StackPanel>
         </StackPanel>
       </DockPanel>
       <Separator />
       <DockPanel Classes="r">
         <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding StartAtLogin}" OnContent="" OffContent=""
                       AutomationProperties.Name="Start ved login" />
-        <TextBlock Text="Start AulaSync, når jeg logger ind" VerticalAlignment="Center" TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <TextBlock Text="Start AulaSync, når jeg logger ind" />
+          <app:InfoTip Text="AulaSync skal køre, for at kalenderne bliver opdateret. Slået til starter AulaSync i baggrunden, når du logger ind på computeren, uden at vise vinduet." AutomationProperties.Name="Om Start AulaSync, når jeg logger ind" />
+        </StackPanel>
       </DockPanel>
       <Separator />
       <DockPanel Classes="r">
         <Panel DockPanel.Dock="Right" VerticalAlignment="Center">
-          <Button Content="Log ud…" Command="{Binding LogOutCommand}" IsVisible="{Binding IsSignedIn}" />
+          <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsSignedIn}">
+            <app:InfoTip Text="Log ud glemmer dit login og dine valgte skemaer, og AulaSync begynder forfra med første start. Kalenderfilerne bliver liggende, så kalenderne viser stadig de seneste skemaer, men de bliver ikke opdateret." AutomationProperties.Name="Om Log ud" />
+            <Button Content="Log ud…" Command="{Binding LogOutCommand}" />
+          </StackPanel>
           <Button Content="Log ind…" Command="{Binding LogInCommand}" IsVisible="{Binding !IsSignedIn}" />
         </Panel>
         <StackPanel VerticalAlignment="Center">
@@ -68,29 +102,29 @@
       <DockPanel Classes="r">
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <Button Classes="ghost" Content="Vejledning" Command="{Binding OpenGuideCommand}" />
+          <Button Classes="ghost" Content="Hjemmeside" Command="{Binding OpenWebsiteCommand}" />
           <Button Classes="ghost" Content="Kom i gang igen…" Command="{Binding ShowOnboardingCommand}" />
         </StackPanel>
         <TextBlock Text="Hjælp" VerticalAlignment="Center" />
       </DockPanel>
-      <Separator />
       <DockPanel Classes="r">
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <Button Classes="ghost" Content="Åbn kalendermappe" Command="{Binding OpenCalendarFolderCommand}" />
           <Button Classes="ghost" Content="Åbn log" Command="{Binding OpenLogCommand}" />
         </StackPanel>
-        <StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <TextBlock Text="Fejlfinding" />
-          <TextBlock Classes="sub" Text="{Binding VersionText}" />
+          <app:InfoTip Text="Kalendermappen har én fil pr. skema; dem bruger du, når du importerer i Outlook. Loggen viser, hvad AulaSync har gjort, fx om kalender-serveren startede, og hvilket program der har hentet hvert skema." AutomationProperties.Name="Om Fejlfinding" />
         </StackPanel>
       </DockPanel>
       <Separator />
-      <DockPanel Classes="r">
-        <Button DockPanel.Dock="Right" Classes="ghost" Content="Afinstallér AulaSync…" Command="{Binding UninstallCommand}"
-                VerticalAlignment="Center" />
-        <StackPanel VerticalAlignment="Center">
-          <TextBlock Text="Afinstallér" />
-          <TextBlock Classes="sub" TextWrapping="Wrap" Text="Fjerner AulaSync og alt, den har gemt på computeren." />
+      <!-- Nederst: version og afinstallation (AulaSync spørger først og forklarer, hvad der slettes). -->
+      <DockPanel Margin="0,8,0,0">
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+          <Button Classes="ghost" Content="Afinstallér AulaSync…" Command="{Binding UninstallCommand}" />
+          <app:InfoTip Text="Fjerner AulaSync og alt, den har gemt på computeren: start ved login, dit login, dine indstillinger, loggen og kalenderfilerne. AulaSync spørger først. Kalenderne i dit kalenderprogram skal du selv slette." AutomationProperties.Name="Om Afinstallér AulaSync" />
         </StackPanel>
+        <TextBlock Classes="sub" Text="{Binding VersionText}" VerticalAlignment="Center" />
       </DockPanel>
     </StackPanel>
   </ScrollViewer>

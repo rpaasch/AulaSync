@@ -170,6 +170,30 @@ public class ConfigStoreTests
         Assert.DoesNotContain("ServerPort", File.ReadAllText(dir.File("config.json")));
     }
 
+    // En config.json fra før valget af visning (kun StatusEvent) giver aftalen med klokkeslæt; valget gemmes som tekst.
+    [Fact]
+    public void Status_style_defaults_to_timed_and_is_saved_as_text()
+    {
+        using var dir = new TempDir();
+        File.WriteAllText(dir.File("config.json"), "{\"StatusEvent\": true}");
+        var store = new ConfigStore(dir.File("config.json"));
+        Assert.Equal(StatusStyle.Timed, store.Load().StatusStyle);
+        store.Save(store.Load() with { StatusStyle = StatusStyle.AllDay });
+        Assert.Equal(StatusStyle.AllDay, store.Load().StatusStyle);
+        Assert.Contains("\"AllDay\"", File.ReadAllText(dir.File("config.json")));
+    }
+
+    // Statusaftalens klokkeslæt gemmes i minutter efter midnat; uden eller med en ugyldig værdi er det kl. 5.45.
+    [Theory]
+    [InlineData(null, 5, 45)]
+    [InlineData(450, 7, 30)]
+    [InlineData(0, 0, 0)]
+    [InlineData(1439, 23, 59)]
+    [InlineData(-1, 5, 45)]
+    [InlineData(1440, 5, 45)]
+    public void Status_time_defaults_to_5_45(int? minutes, int hour, int minute) =>
+        Assert.Equal(new TimeOnly(hour, minute), new AppConfig(StatusMinutes: minutes).StatusTime);
+
     [Fact]
     public void Corrupt_file_gives_defaults()
     {

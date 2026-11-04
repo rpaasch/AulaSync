@@ -299,7 +299,8 @@ public sealed class SyncService
             var today = DateOnly.FromDateTime(_time.GetLocalNow().DateTime);
             var events = await new ScheduleFetcher(client, _delay).FetchAsync(schedule, today, ct);
             var config = _config();
-            var options = new IcsOptions(UpdateIntervals.Refresh(config.UpdateInterval), config.StatusEvent ? _time.LocalTimeZone : null);
+            var options = new IcsOptions(UpdateIntervals.Refresh(config.UpdateInterval), config.StatusEvent ? _time.LocalTimeZone : null,
+                config.StatusTime, config.StatusStyle);
             var path = NewPath(schedule);
             AtomicFile.WriteAllText(path, IcsWriter.Write(schedule, events, now, options));
             // Blev skemaet fjernet, mens det blev hentet, så fjern også filen igen. Ved log ud bliver filerne liggende.

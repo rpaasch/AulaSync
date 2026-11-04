@@ -38,7 +38,7 @@ public sealed class AppHost
         Platform = new DesktopPlatform(Log);
         Autostart = AutostartFactory.ForCurrentPlatform(ExecutablePath);
         Windows = new AppWindows(this);
-        Actions = new MainActions(Sync, Config, Platform, Windows);
+        Actions = new MainActions(Sync, Config, Platform, Windows, Time);
         Notifier = new NotificationBox(Platform, Log, Time);
         // Uden WebView2 Runtime kan login ikke lykkes; så vises notifikationen med det samme i stedet for efter 30 s.
         Relogin = new Relogin(ct => SilentLogin.RunAsync(Browser, Session, ct), Notifier, Log, Time,

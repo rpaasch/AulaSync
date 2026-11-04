@@ -1,5 +1,12 @@
 AulaSync 3 er en ny udgave med ét formål: skemaer fra Aula, der holder sig opdateret i din kalender, på Windows og Mac.
 
+**Nyt i 3.3.0**
+- *Vis opdateringstid i kalenderen* er blevet en rullemenu i Indstillinger. Tidspunktet kan stå som en privat heldagsbegivenhed hver mandag, som en privat aftale hver mandag på et klokkeslæt, du selv vælger, eller nederst i hver lektions beskrivelse. Heldagsbegivenheden og aftalen står hver mandag, ikke kun i denne uge, så du kan se dem, uanset hvilken uge du kigger på. Brugte du aftalen kl. 5.45, fortsætter den.
+- Når du ændrer *Vis opdateringstid i kalenderen*, henter AulaSync skemaerne med det samme i stedet for ved næste opdatering.
+- Outlook (klassisk): En kalender, du har slettet i Outlook og tilføjer igen, får nu sit navn, fordi *Tilføj til Outlook* giver Outlook en ny adresse hver gang. Har du en kalender uden navn fra før, så højreklik på den i Outlook, vælg *Omdøb kalender*, og skriv skemaets navn.
+- Indstillinger er strammet op, og et lille ⓘ ved hver indstilling forklarer den. *Hjælp* har fået knappen *Hjemmeside*.
+- Mac med Homebrew: Siger Homebrew ved `brew upgrade`, at tap'en ikke er betroet (*untrusted tap*), fx fordi AulaSync blev installeret med en Homebrew fra før version 6, så skriv først `brew trust --cask rpaasch/tap/aulasync`.
+
 **Nyt i 3.2.1**
 - Mac: AulaSync er nu signeret af udvikleren og undersøgt af Apple (notariseret). Første gang spørger macOS kun, om du vil åbne en app, der er hentet fra internettet; klik *Åbn*. Du skal ikke længere vælge *Åbn alligevel* i Systemindstillinger › Anonymitet & sikkerhed.
 - Mac: AulaSync kan installeres med Homebrew: `brew install --cask rpaasch/tap/aulasync`, og en ny udgave får du med `brew upgrade --cask rpaasch/tap/aulasync`. macOS spørger kun første gang, ikke ved de næste opgraderinger.

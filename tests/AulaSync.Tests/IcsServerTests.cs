@@ -68,6 +68,8 @@ public class IcsServerTests : IDisposable
         var s = new ScheduleRef(ScheduleKind.Resource, "412", "53");
         Assert.Equal("http://localhost:9876/lokale-412.ics", IcsServer.UrlFor(s, 9876));
         Assert.Equal("webcal://localhost:9877/lokale-412.ics", IcsServer.WebcalFor(s, 9877));
+        Assert.Equal("webcal://localhost:9877/lokale-412.ics?tilfoejet=1791288000", IcsServer.WebcalFor(s, 9877, 1791288000));
+        Assert.Equal("http://localhost:9877/lokale-412.ics?tilfoejet=1791288000", IcsServer.UrlFor(s, 9877, 1791288000));
     }
 
     static int FreePort()
@@ -249,7 +251,8 @@ public class IcsServerTests : IDisposable
         using var http = new HttpClient();
 
         File.WriteAllText(_dir.File("123456-7A-klasse-88231.ics"), "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n");
-        await http.GetAsync($"http://localhost:{port}/klasse-88231.ics"); // adressens navn, ikke filens
+        // Adressens navn, ikke filens, og uden "?tilfoejet=…" (Outlook får en ny adresse ved hvert klik).
+        await http.GetAsync($"http://localhost:{port}/klasse-88231.ics?tilfoejet=1791288000");
         var first = await http.GetAsync($"http://localhost:{port}/lokale-412.ics");
         var again = new HttpRequestMessage(HttpMethod.Get, $"http://localhost:{port}/lokale-412.ics");
         again.Headers.IfModifiedSince = first.Content.Headers.LastModified;

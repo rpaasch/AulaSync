@@ -1,15 +1,20 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace AulaSync.Core;
 
 public sealed record IcsSummary(int Events, string ContentHash);
 
-public static class IcsInspect
+public static partial class IcsInspect
 {
+    // Tidspunktet sidst i en lektions beskrivelse (IcsWriter med StatusStyle.InDescription), fx "…\n\nOpd. 091026@07:30".
+    [GeneratedRegex(@"^DESCRIPTION:(?<rest>.*?)(?:\\n\\n)?Opd\. \d{6}@\d{2}:\d{2}$", RegexOptions.CultureInvariant)]
+    private static partial Regex StatusInDescription();
+
     // Antal begivenheder og en hash af indholdet. DTSTAMP ændres ved hver skrivning og tæller derfor ikke med, og det gør
-    // statusbegivenheden heller ikke (IcsWriter.StatusUidPrefix). from/until: kun begivenheder, der starter i tidsrummet
+    // statusbegivenhederne og tidspunktet sidst i beskrivelsen heller ikke (IcsWriter.StatusUidPrefix, StatusInDescription). from/until: kun begivenheder, der starter i tidsrummet
     // (begge grænser med), tæller.
     public static IcsSummary Read(string ics, DateTimeOffset? from = null, DateTimeOffset? until = null)
     {
@@ -31,6 +36,11 @@ public static class IcsInspect
             if (current is null || line.StartsWith("DTSTAMP:", StringComparison.Ordinal)) continue;
             if (line.StartsWith("UID:", StringComparison.Ordinal)) uid = line[4..];
             if (line.StartsWith("DTSTART:", StringComparison.Ordinal)) start = Utc(line[8..]);
+            if (StatusInDescription().Match(line) is { Success: true } m)
+            {
+                if (m.Groups["rest"].Value != "") current.Add($"DESCRIPTION:{m.Groups["rest"].Value}");
+                continue;
+            }
             current.Add(line);
         }
         if (from is not null || until is not null)
