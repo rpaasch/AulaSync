@@ -17,12 +17,16 @@
 #      mappen i PATH og pakkemappen er også væk.
 # Installationsprogrammet og AulaSync køres som almindelig bruger (runas /trustlevel), ligesom når winget kører i et
 # almindeligt vindue; GitHubs maskine kører ellers alt som administrator.
+# Med -ExpectSigner <aftryk> tjekkes desuden, at installationsprogrammet, den løse exe, den installerede AulaSync.exe og
+# afinstallationsprogrammet er gyldigt signeret med det certifikat (og med -ExpectTimestamp, at de har et tidsstempel).
 #
 #   pwsh packaging/windows/test-installer.ps1 out/setup/AulaSync-Setup.exe out/win/AulaSync.exe
 param(
     [Parameter(Mandatory)][string]$Setup,
     [Parameter(Mandatory)][string]$Exe,
-    [string]$OldVersion = '3.1.1'
+    [string]$OldVersion = '3.1.1',
+    [string]$ExpectSigner,
+    [switch]$ExpectTimestamp
 )
 
 $ErrorActionPreference = 'Stop'
@@ -48,6 +52,14 @@ if ($work -match ' ') { throw "Stien må ikke indeholde mellemrum (runas): $work
 function Check($ok, $text) {
     if (-not $ok) { throw "FEJL: $text" }
     Write-Host "ok: $text"
+}
+function Check-Signed([string]$path) {
+    if (-not $ExpectSigner) { return }
+    $sig = Get-AuthenticodeSignature $path
+    $name = Split-Path $path -Leaf
+    Check ($sig.Status -eq 'Valid') "$name er gyldigt signeret ($($sig.Status))"
+    Check ($sig.SignerCertificate.Thumbprint -eq $ExpectSigner.ToUpperInvariant()) "$name er signeret med det forventede certifikat"
+    if ($ExpectTimestamp) { Check ($null -ne $sig.TimeStamperCertificate) "$name har et tidsstempel" }
 }
 function Wait-Until([scriptblock]$condition, [int]$seconds, [string]$text) {
     $end = (Get-Date).AddSeconds($seconds)
@@ -92,6 +104,8 @@ function Install([string]$extra = '') {
 
 try {
     if (-not (Test-Path $run)) { New-Item $run -Force | Out-Null }
+    Check-Signed $Setup
+    Check-Signed $loose
 
     Write-Host "== 1. AulaSync $OldVersion kører fra en løs exe med start ved login"
     $old = Join-Path $work 'gammel\AulaSync.exe'
@@ -108,6 +122,8 @@ try {
     Check ((RunValue) -eq "`"$app`" --silent") 'start ved login peger på den installerede AulaSync'
     Check ((Get-ItemProperty $uninstallKey).DisplayName -eq 'AulaSync') 'AulaSync står under Installerede apps'
     Check ((Get-ItemProperty $uninstallKey).DisplayIcon -eq $app) 'Installerede apps viser AulaSyncs ikon'
+    Check-Signed $app
+    Check-Signed (Join-Path (Split-Path $app) 'unins000.exe')
     Check (-not (Running $old)) "AulaSync $OldVersion er lukket"
     Wait-Until { Running $app } 30 'den installerede AulaSync er startet igen'
     Wait-Until { Locked } 60 'den installerede AulaSync kører'

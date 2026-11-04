@@ -24,6 +24,15 @@ Med det fulde navn henter Homebrew tap'en først, så en ny udgave ses med det s
 Kører AulaSync, lukker Homebrew den først og åbner den igen bagefter. macOS spørger ikke igen, fordi den nye udgave er
 signeret af den samme udvikler.
 
+Siger Homebrew, at tap'en ikke er betroet ("untrusted tap"), fx fordi AulaSync blev installeret med en Homebrew fra før
+version 6, så skriv først:
+
+```sh
+brew trust --cask rpaasch/tap/aulasync
+```
+
+Det stoler kun på AulaSync herfra, ikke på resten af tap'en. Det samme gælder `brew uninstall`.
+
 Siger macOS, at "Terminal" blev forhindret i at ændre apps på din Mac, er opdateringen alligevel gået igennem: Homebrew
 fjerner så den gamle AulaSync og lægger den nye ind. Vil du undgå beskeden, så slå Terminal til under
 **Systemindstillinger › Anonymitet & sikkerhed › Appadministration**, og luk og åbn Terminal igen.

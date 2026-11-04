@@ -31,10 +31,12 @@ public sealed partial class ImportGuideViewModel(ScheduleRef schedule, Func<stri
     [RelayCommand] void Reveal() => platform.RevealFile(filePath());
 }
 
-// "Åbnede Outlook ikke kalenderen?" efter Tilføj til Outlook (klassisk Outlook). port: kalender-serverens port.
+// "Åbnede Outlook ikke kalenderen?" efter Tilføj til Outlook (klassisk Outlook). port: kalender-serverens port. Adressen er
+// ny for hver dialog (som webcal-adressen i MainActions), så en kalender, der er slettet i Outlook og tilføjes igen via Fra
+// internettet, også får sit navn.
 public sealed partial class OutlookFallbackViewModel(ScheduleRef schedule, int port, IPlatform platform, TimeProvider time) : ObservableObject
 {
-    public string Address => IcsServer.UrlFor(schedule, port);
+    public string Address { get; } = IcsServer.UrlFor(schedule, port, time.GetUtcNow().ToUnixTimeSeconds());
 
     [ObservableProperty] public partial string CopyLabel { get; set; } = "Kopiér adresse";
 

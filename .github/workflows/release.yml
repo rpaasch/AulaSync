@@ -1,6 +1,8 @@
 # Udgivelse af AulaSync (plan Task 20).
 # - Versionsmærke vX.Y.Z: test, byg Windows-installationsprogrammet og Mac-dmg'erne, lav en GitHub-udgivelse med filerne og
-#   winget-manifesterne.
+#   winget-manifesterne. Med repo-variablen WINDOWS_SIGNING=certum bliver udgivelsen en kladde med Mac-dmg'erne: udgiv.ps1
+#   signerer Windows-filerne lokalt (Certum SimplySign), lægger dem på kladden, og windows-signeret.yml afprøver og udgiver.
+#   Når udgivelsen er udgivet, startes efter-udgivelse.yml (winget og Homebrew) i et job for sig.
 # - Push til en gren, der ændrer pakningen, eller kørt i hånden (Actions › Udgivelse › Run workflow, kun fra
 #   standardgrenen): det samme, men kun som artefakter, uden udgivelse. Sti-filteret gælder ikke for versionsmærker.
 name: Udgivelse
@@ -109,6 +111,52 @@ jobs:
         with:
           name: winget
           path: out/winget
+
+  # Prøve af den lokale signering, som udgiv.ps1 bruger med Certum: sign-windows.ps1 i Windows PowerShell 5.1 med et
+  # selvsigneret certifikat, som maskinen stoler på, og afprøvning af det signerede installationsprogram (også
+  # afinstallationsprogrammets signatur). Kun prøvebygninger; versionsmærker afprøves af windows-signeret.yml.
+  windows-signering:
+    if: github.ref_type != 'tag'
+    needs: [version, windows]
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows
+          path: unsigned
+      - name: Selvsigneret prøvecertifikat
+        id: cert
+        shell: pwsh
+        run: |
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=AulaSync proevesignering' -KeyAlgorithm RSA -KeyLength 3072 `
+            -HashAlgorithm SHA256 -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddDays(2)
+          $cer = Join-Path $env:RUNNER_TEMP 'proeve.cer'
+          Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher | Out-Null
+          "thumbprint=$($cert.Thumbprint)" >> $env:GITHUB_OUTPUT
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; if ($LASTEXITCODE) { exit $LASTEXITCODE } }
+      - name: Prøvesignering
+        shell: powershell
+        run: packaging\windows\sign-windows.ps1 -Test -Thumbprint ${{ steps.cert.outputs.thumbprint }}
+      - name: Signér AulaSync.exe og byg det signerede installationsprogram
+        shell: powershell
+        run: >
+          packaging\windows\sign-windows.ps1 -Exe unsigned\win\AulaSync.exe -Version ${{ needs.version.outputs.version }}
+          -Out out\signed -Thumbprint ${{ steps.cert.outputs.thumbprint }}
+      - name: Prøv det signerede installationsprogram af
+        shell: pwsh
+        timeout-minutes: 20
+        run: >
+          packaging/windows/test-installer.ps1 out/signed/setup/AulaSync-Setup.exe out/signed/win/AulaSync.exe
+          -ExpectSigner ${{ steps.cert.outputs.thumbprint }} -ExpectTimestamp
 
   mac:
     needs: [version, test]
@@ -316,6 +364,12 @@ jobs:
     if: github.ref_type == 'tag'
     needs: [version, windows, mac, mac-intel]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      # certum: Windows-filerne signeres lokalt af udgiv.ps1, så udgivelsen bliver en kladde uden dem. Uden variablen
+      # udgives de usignerede filer som før (fx i en fork).
+      WINDOWS_SIGNING: ${{ vars.WINDOWS_SIGNING }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -326,6 +380,41 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           v="${{ needs.version.outputs.version }}"
-          (cd artifacts/winget && zip -qr "../../winget-manifests-$v.zip" manifests)
-          gh release create "$GITHUB_REF_NAME" --title "AulaSync $v" --notes-file packaging/release-notes.md \
-            artifacts/windows/setup/AulaSync-Setup.exe artifacts/windows/win/AulaSync.exe artifacts/mac/*.dmg "winget-manifests-$v.zip"
+          case "$WINDOWS_SIGNING" in
+            certum)
+              # Køres jobbet igen, genbruges kladden (gh release create ser ikke efter kladder og ville lave en til).
+              if draft=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2> /dev/null); then
+                if [ "$draft" != true ]; then echo "::error::$GITHUB_REF_NAME er allerede udgivet"; exit 1; fi
+                gh release upload "$GITHUB_REF_NAME" artifacts/mac/*.dmg --clobber
+              else
+                gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "AulaSync $v" --notes-file packaging/release-notes.md artifacts/mac/*.dmg
+              fi
+              echo "::notice::$GITHUB_REF_NAME er en kladde. udgiv.ps1 signerer Windows-filerne og lægger dem på; windows-signeret.yml udgiver den." ;;
+            '')
+              (cd artifacts/winget && zip -qr "../../winget-manifests-$v.zip" manifests)
+              files=(artifacts/windows/setup/AulaSync-Setup.exe artifacts/windows/win/AulaSync.exe artifacts/mac/*.dmg "winget-manifests-$v.zip")
+              # En kladde fra en opgivet signering (WINDOWS_SIGNING slettet efter versionsmærket) får filerne og udgives.
+              if draft=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2> /dev/null); then
+                if [ "$draft" != true ]; then echo "::error::$GITHUB_REF_NAME er allerede udgivet"; exit 1; fi
+                gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+                gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+              else
+                gh release create "$GITHUB_REF_NAME" --title "AulaSync $v" --notes-file packaging/release-notes.md "${files[@]}"
+              fi ;;
+            *)
+              echo "::error::Ukendt værdi i repo-variablen WINDOWS_SIGNING: $WINDOWS_SIGNING (certum eller tom)"; exit 1 ;;
+          esac
+
+  # winget og Homebrew af sig selv, når udgivelsen er udgivet (med certum sker det fra windows-signeret.yml). Et job for sig,
+  # så det kan køres igen uden at gentage udgivelsen. Uden nøglen springer efter-udgivelse.yml selv winget og Homebrew over.
+  efter-udgivelse:
+    if: github.ref_type == 'tag' && vars.WINDOWS_SIGNING == ''
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Start winget og Homebrew
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run efter-udgivelse.yml -R "$GITHUB_REPOSITORY" -f "tag=$GITHUB_REF_NAME"

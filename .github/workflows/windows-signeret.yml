@@ -1,0 +1,153 @@
+# Udgiver en kladde-udgivelse, når udgiv.ps1 har lagt de lokalt signerede Windows-filer på den (repo-variablen
+# WINDOWS_SIGNING=certum, se release.yml): tjekker, at der er én kladde for versionsmærket med netop Mac-dmg'erne og de to
+# Windows-filer, at AulaSync-Setup.exe og AulaSync.exe har den rigtige version og er gyldigt signeret med tidsstempel af
+# certifikatet i repo-variablen WINDOWS_CERT_SHA1 (også den installerede exe og afinstallationsprogrammet), prøver
+# installationsprogrammet af, laver winget-manifesterne ud fra de signerede filer og udgiver. udgiv.ps1 starter det:
+#
+#   gh workflow run windows-signeret.yml --ref v3.2.2 -f tag=v3.2.2
+#
+# Uden tag gør det intet; udgiv.ps1 kører det sådan én gang på master, så GitHub kender workflowet, før det skal bruges.
+# Efter udgivelsen startes efter-udgivelse.yml (winget og Homebrew) i et job for sig.
+name: Signeret Windows-udgivelse
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Versionsmærket (fx v3.2.2); kør workflowet på samme versionsmærke. Tom = prøvekørsel uden udgivelse
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-signeret-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  proevekoersel:
+    if: inputs.tag == ''
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Prøvekørsel uden versionsmærke; intet udgives."
+
+  udgiv:
+    if: inputs.tag != ''
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+      CERT_SHA1: ${{ vars.WINDOWS_CERT_SHA1 }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Tjek versionsmærket og certifikatets aftryk
+        id: v
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "::error::Ugyldigt versionsmærke: $TAG"; exit 1; fi
+          if [ "$GITHUB_REF" != "refs/tags/$TAG" ]; then echo "::error::Kør workflowet på versionsmærket (--ref $TAG), ikke $GITHUB_REF"; exit 1; fi
+          if ! [[ "$CERT_SHA1" =~ ^[0-9A-Fa-f]{40}$ ]]; then echo "::error::Repo-variablen WINDOWS_CERT_SHA1 mangler eller er ikke et SHA-1-aftryk."; exit 1; fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+      # Én kladde for versionsmærket, med netop disse filer, alle helt uploadet (en afbrudt upload efterlader en fil med
+      # tilstanden starter). En winget-zip fra en tidligere kørsel, der stoppede før udgivelsen, fjernes først; den laves
+      # igen nedenfor ud fra de afprøvede filer.
+      - name: Tjek kladden
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          ids=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate --jq '.[] | select(.tag_name == env.TAG) | "\(.id) \(.draft)"')
+          if [ "$(printf '%s\n' "$ids" | grep -c .)" != 1 ]; then echo "::error::Der skal være netop én udgivelse for $TAG, fandt: ${ids:-ingen}"; exit 1; fi
+          read -r id draft <<< "$ids"
+          if [ "$draft" != true ]; then echo "::error::$TAG er ikke en kladde (er den allerede udgivet?)"; exit 1; fi
+          for a in $(gh api "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" --paginate --jq '.[] | select(.name | startswith("winget-manifests-")) | .id'); do
+            echo "Fjerner winget-zip'en fra en tidligere kørsel."
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$a"
+          done
+          assets=$(gh api "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" --paginate --jq '.[] | "\(.name) \(.state)"' | sort)
+          expected=$(printf '%s uploaded\n' "AulaSync-$VERSION-arm64.dmg" "AulaSync-$VERSION-x64.dmg" AulaSync-Setup.exe AulaSync.exe | sort)
+          if [ "$assets" != "$expected" ]; then
+            echo "::error::Kladden har ikke de forventede filer."; printf 'Forventet:\n%s\nFundet:\n%s\n' "$expected" "$assets"; exit 1
+          fi
+          echo "RELEASE_ID=$id" >> "$GITHUB_ENV"
+      - name: Hent de signerede filer fra kladden
+        run: |
+          mkdir -p out/signed/setup out/signed/win
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p AulaSync-Setup.exe -D out/signed/setup
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p AulaSync.exe -D out/signed/win
+      - name: Tjek version og signatur
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          foreach ($f in 'out/signed/setup/AulaSync-Setup.exe', 'out/signed/win/AulaSync.exe') {
+            $fv = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $f).Path).FileVersion
+            if ($fv -notmatch "^$([regex]::Escape($env:VERSION))(\.0)?$") { throw "$f har version $fv, ikke $env:VERSION" }
+            $sig = Get-AuthenticodeSignature $f
+            if ($sig.Status -ne 'Valid') { throw "$f er ikke gyldigt signeret ($($sig.Status))" }
+            if ($sig.SignerCertificate.Thumbprint -ne $env:CERT_SHA1.ToUpperInvariant()) { throw "$f er signeret med et andet certifikat ($($sig.SignerCertificate.Thumbprint))" }
+            if (-not $sig.TimeStamperCertificate) { throw "$f har intet tidsstempel" }
+            "ok: $f ($fv) er signeret"
+          }
+      - name: Prøv installationsprogrammet af
+        shell: pwsh
+        timeout-minutes: 20
+        run: >
+          packaging/windows/test-installer.ps1 out/signed/setup/AulaSync-Setup.exe out/signed/win/AulaSync.exe
+          -ExpectSigner $env:CERT_SHA1 -ExpectTimestamp
+      - name: winget-manifester
+        run: >
+          bash packaging/winget/make-manifests.sh "${{ steps.v.outputs.version }}"
+          out/signed/setup/AulaSync-Setup.exe out/signed/win/AulaSync.exe "$GITHUB_REPOSITORY" out/winget
+      - name: Tjek manifesterne mod winget-skemaerne
+        run: |
+          pip install --quiet check-jsonschema
+          d="out/winget/manifests/r/rpaasch/AulaSync/${{ steps.v.outputs.version }}"
+          check-jsonschema --schemafile https://aka.ms/winget-manifest.version.1.12.0.schema.json "$d/rpaasch.AulaSync.yaml"
+          check-jsonschema --schemafile https://aka.ms/winget-manifest.installer.1.12.0.schema.json "$d/rpaasch.AulaSync.installer.yaml"
+          check-jsonschema --schemafile https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json "$d/rpaasch.AulaSync.locale.da-DK.yaml"
+      # Samme opbygning som i release.yml: zip-filen har mappen manifests/ øverst.
+      - name: winget-manifesterne på kladden
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          $zip = "winget-manifests-$env:VERSION.zip"
+          Compress-Archive -Path out/winget/manifests -DestinationPath $zip
+          gh release upload $env:TAG $zip -R $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      # Til sidst skal alle fem filer være helt uploadet (med immutable releases kan intet tilføjes efter udgivelsen), og
+      # Windows-filerne og zip'en skal være netop dem, jobbet har afprøvet og lavet: er der lagt nye filer op undervejs (fx af
+      # en ny kørsel af udgiv.ps1), udgives intet.
+      - name: Udgiv
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          assets=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" --paginate --jq '.[] | "\(.name) \(.state)"' | sort)
+          expected=$(printf '%s uploaded\n' "AulaSync-$VERSION-arm64.dmg" "AulaSync-$VERSION-x64.dmg" AulaSync-Setup.exe AulaSync.exe "winget-manifests-$VERSION.zip" | sort)
+          if [ "$assets" != "$expected" ]; then
+            echo "::error::Kladden har ikke de forventede filer."; printf 'Forventet:\n%s\nFundet:\n%s\n' "$expected" "$assets"; exit 1
+          fi
+          for f in out/signed/setup/AulaSync-Setup.exe out/signed/win/AulaSync.exe "winget-manifests-$VERSION.zip"; do
+            n=$(basename "$f"); want="sha256:$(sha256sum "$f" | cut -d' ' -f1)"
+            got=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" --paginate --jq ".[] | select(.name == \"$n\") | .digest")
+            if [ "$got" != "$want" ]; then echo "::error::$n på kladden er ikke den fil, jobbet afprøvede (lagt op igen undervejs?). Kør udgiv.ps1 igen."; exit 1; fi
+          done
+          gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --latest
+          echo "Udgivet: $TAG"
+
+  # Et job for sig, så det kan køres igen uden at gentage udgivelsen (en ny kørsel af udgiv-jobbet stopper ved Tjek kladden).
+  efter-udgivelse:
+    if: inputs.tag != ''
+    needs: udgiv
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Start winget og Homebrew
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh workflow run efter-udgivelse.yml -R "$GITHUB_REPOSITORY" -f "tag=$TAG"

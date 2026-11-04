@@ -108,7 +108,7 @@ Hent `AulaSync-<version>-arm64.dmg` (Apple-chip, M1 og nyere) eller `AulaSync-<v
 
 Åbn AulaSync fra **Programmer** (ikke fra `.dmg`-filen, ellers kan AulaSync ikke starte af sig selv, når du logger ind). AulaSync er signeret af udvikleren og undersøgt af Apple (notariseret), så første gang spørger macOS kun, om du vil åbne en app, der er hentet fra internettet. Klik **Åbn**.
 
-Med [Homebrew](https://brew.sh): skriv `brew install --cask rpaasch/tap/aulasync` i Terminal. Homebrew henter den rigtige udgave til din Mac og lægger AulaSync i **Programmer**; første gang du åbner den, spørger macOS som ovenfor. Ny udgave: `brew upgrade --cask rpaasch/tap/aulasync`. Kører AulaSync, lukker Homebrew den og åbner den igen, og macOS spørger ikke igen.
+Med [Homebrew](https://brew.sh): skriv `brew install --cask rpaasch/tap/aulasync` i Terminal. Homebrew henter den rigtige udgave til din Mac og lægger AulaSync i **Programmer**; første gang du åbner den, spørger macOS som ovenfor. Ny udgave: `brew upgrade --cask rpaasch/tap/aulasync`. Kører AulaSync, lukker Homebrew den og åbner den igen, og macOS spørger ikke igen. Siger Homebrew, at tap'en ikke er betroet (*untrusted tap*), fx fordi AulaSync blev installeret med en Homebrew fra før version 6, så skriv først `brew trust --cask rpaasch/tap/aulasync`.
 
 ## Data og privatliv
 

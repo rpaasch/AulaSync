@@ -11,11 +11,18 @@ public sealed record IntervalOption(int Minutes, string Label)
     public override string ToString() => Label;
 }
 
+// Et valg under "Vis opdateringstid i kalenderen": fra, eller hvordan tidspunktet vises (StatusStyle).
+public sealed record StatusOption(bool On, StatusStyle Style, string Label)
+{
+    public override string ToString() => Label;
+}
+
 // Indstillinger (spec §3.2): kalenderprogram, opdatering, start ved login, konto med Log ud…, hjælp, fejlfinding, version og
 // Afinstallér AulaSync….
 public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
 {
     public const string GuideUrl = "https://github.com/rpaasch/AulaSync/blob/master/docs/vejledning.md";
+    public const string WebsiteUrl = "https://rpaasch.github.io/AulaSync/";
 
     readonly ConfigStore _config;
     readonly IAutostart _autostart;
@@ -26,12 +33,14 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
     readonly Func<Task> _signOut;
     readonly Action _calendarAppChanged;
     readonly Action _intervalChanged;
+    readonly Action _statusEventChanged;
     readonly IUninstall _uninstall;
 
-    // intervalChanged: baggrundsplanen regner næste opdatering om (BackgroundScheduler.Reschedule). uninstall:
-    // Afinstallér AulaSync… (UninstallLauncher).
+    // intervalChanged: baggrundsplanen regner næste opdatering om (BackgroundScheduler.Reschedule). statusEventChanged:
+    // skemaerne hentes med det samme, så kalenderfilerne får eller mister statusaftalen (BackgroundScheduler.SyncSoon).
+    // uninstall: Afinstallér AulaSync… (UninstallLauncher).
     public SettingsViewModel(ConfigStore config, IAutostart autostart, SessionController session, IDialogs dialogs, IPlatform platform,
-        AppPaths paths, Func<Task> signOut, Action calendarAppChanged, Action intervalChanged, IUninstall uninstall)
+        AppPaths paths, Func<Task> signOut, Action calendarAppChanged, Action intervalChanged, Action statusEventChanged, IUninstall uninstall)
     {
         _config = config;
         _autostart = autostart;
@@ -42,13 +51,22 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
         _signOut = signOut;
         _calendarAppChanged = calendarAppChanged;
         _intervalChanged = intervalChanged;
+        _statusEventChanged = statusEventChanged;
         _uninstall = uninstall;
         var saved = config.Load();
         var chosen = saved.CalendarApp;
         Cards = CalendarApps.All.Select(a => new CalendarCardViewModel(a, SelectCard) { IsSelected = a == chosen }).ToList();
         Intervals = UpdateIntervals.Minutes.Select(m => new IntervalOption(m, UpdateIntervals.Label(m))).ToList();
         SelectedInterval = Intervals.Single(i => TimeSpan.FromMinutes(i.Minutes) == saved.UpdateInterval);
-        StatusEvent = saved.StatusEvent;
+        StatusOptions =
+        [
+            new(false, StatusStyle.Timed, "Fra"),
+            new(true, StatusStyle.AllDay, "Heldagsbegivenhed hver mandag"),
+            new(true, StatusStyle.Timed, "Aftale hver mandag"),
+            new(true, StatusStyle.InDescription, "I hver lektions beskrivelse"),
+        ];
+        SelectedStatus = StatusOptions.FirstOrDefault(o => o.On && saved.StatusEvent && o.Style == saved.StatusStyle) ?? StatusOptions[0];
+        StatusTime = saved.StatusTime.ToTimeSpan();
         StartAtLogin = autostart.IsEnabled;
         session.Changed += () => OnPropertyChanged(string.Empty);
     }
@@ -58,7 +76,13 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
     public IReadOnlyList<IntervalOption> Intervals { get; }
 
     [ObservableProperty] public partial IntervalOption SelectedInterval { get; set; }
-    [ObservableProperty] public partial bool StatusEvent { get; set; }
+    public IReadOnlyList<StatusOption> StatusOptions { get; }
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsTimedStatus))] public partial StatusOption SelectedStatus { get; set; }
+    [ObservableProperty] public partial TimeSpan? StatusTime { get; set; }
+
+    // Klokkeslættet vises kun ved "Aftale hver mandag".
+    public bool IsTimedStatus => SelectedStatus is { On: true, Style: StatusStyle.Timed };
     [ObservableProperty] public partial bool StartAtLogin { get; set; }
 
     public bool IsSignedIn => _session.Profile is not null;
@@ -86,10 +110,27 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
         _intervalChanged();
     }
 
-    // Kommer med i kalenderfilerne ved næste opdatering.
-    partial void OnStatusEventChanged(bool value)
+    // Skemaerne hentes med det samme, så kalenderfilerne viser tidspunktet på den nye måde (eller ikke mere). Fra beholder
+    // den måde, der var valgt.
+    partial void OnSelectedStatusChanged(StatusOption value)
     {
-        if (_config.Load().StatusEvent != value) _config.Save(_config.Load() with { StatusEvent = value });
+        if (value is null) return;
+        var saved = _config.Load();
+        var next = value.On ? saved with { StatusEvent = true, StatusStyle = value.Style } : saved with { StatusEvent = false };
+        if (next == saved) return; // også ved start
+        _config.Save(next);
+        _statusEventChanged();
+    }
+
+    // Aftalens klokkeslæt hver mandag; vises aftalen, hentes skemaerne med det samme, så den flytter.
+    partial void OnStatusTimeChanged(TimeSpan? value)
+    {
+        if (value is not { } time || time < TimeSpan.Zero || time >= TimeSpan.FromDays(1)) return;
+        var saved = _config.Load();
+        var minutes = (int)time.TotalMinutes;
+        if (saved.StatusTime == TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(minutes))) return; // også ved start
+        _config.Save(saved with { StatusMinutes = minutes });
+        if (saved is { StatusEvent: true, StatusStyle: StatusStyle.Timed }) _statusEventChanged();
     }
 
     partial void OnStartAtLoginChanged(bool value)
@@ -106,6 +147,8 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
     [RelayCommand] void LogIn() => _dialogs.ShowLogin();
 
     [RelayCommand] void OpenGuide() => _platform.Open(GuideUrl);
+
+    [RelayCommand] void OpenWebsite() => _platform.Open(WebsiteUrl);
 
     [RelayCommand] void ShowOnboarding() => _dialogs.ShowOnboarding();
 

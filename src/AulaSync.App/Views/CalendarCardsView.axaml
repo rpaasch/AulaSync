@@ -1,4 +1,4 @@
-<!-- De fire kort med kalenderprogrammer: første start (trin 3) og Indstillinger. -->
+<!-- De fire kort med kalenderprogrammer: første start (trin 3) og Indstillinger (dér uden beskrivelsen, TextBlock.desc). -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:app="using:AulaSync.App"
@@ -15,7 +15,7 @@
           <StackPanel Spacing="3">
             <TextBlock Text="{Binding Title}" FontSize="13.5" FontWeight="Bold" TextWrapping="Wrap" />
             <TextBlock Classes="sub mode" Classes.ok="{Binding IsAutomatic}" Text="{Binding Mode}" />
-            <TextBlock Classes="sub" Text="{Binding Description}" TextWrapping="Wrap" />
+            <TextBlock Classes="sub desc" Text="{Binding Description}" TextWrapping="Wrap" />
           </StackPanel>
         </RadioButton>
       </DataTemplate>

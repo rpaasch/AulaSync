@@ -3,6 +3,10 @@
 ;
 ;   iscc /DVersion=3.2.0 /DSource=out\win /Oout\setup packaging\windows\AulaSync.iss   -> out\setup\AulaSync-Setup.exe
 ;
+; Signeret (sign-windows.ps1 gør det): /DSign og en signeringskommando med navnet aulasync, fx
+; /Saulasync="signtool.exe sign /sha1 <aftryk> /fd sha256 $f". Så signeres installations- og afinstallationsprogrammet,
+; og AulaSync.exe i Source skal allerede være signeret.
+;
 ; Kører AulaSync, bedes den om at afslutte (AulaSync.exe --quit; ældre udgaver lukkes), og den startes igen bagefter.
 ; Har brugeren slået start ved login til, peger den bagefter på den installerede AulaSync, også når den før lå et andet
 ; sted (fx den løse AulaSync.exe i Dokumenter). /LAUNCH=1 (winget-manifestet) starter AulaSync efter første installation.
@@ -55,6 +59,12 @@ OutputBaseFilename=AulaSync-Setup
 Compression=lzma2
 SolidCompression=yes
 SetupLogging=yes
+#ifdef Sign
+SignTool=aulasync
+; Tidsstempeltjenesten og SimplySign kan svigte et øjeblik.
+SignToolRetryCount=3
+SignToolRetryDelay=10000
+#endif
 
 [Languages]
 Name: "da"; MessagesFile: "compiler:Languages\Danish.isl"
@@ -70,7 +80,11 @@ da.DataLeft=Nogle af AulaSyncs filer var stadig i brug og kunne ikke slettes. Sl
 da.OtherCopy=Der ligger stadig en AulaSync uden installation:%n%n%1%n%nDen starter ikke længere ved login. Slet den, hvis du ikke bruger den (fra winget: skriv winget uninstall rpaasch.AulaSync i Terminal).
 
 [Files]
+#ifdef Sign
+Source: "{#Source}\AulaSync.exe"; DestDir: "{app}"; Flags: ignoreversion signcheck
+#else
 Source: "{#Source}\AulaSync.exe"; DestDir: "{app}"; Flags: ignoreversion
+#endif
 
 [Icons]
 ; Direkte i Start-menuen, uden undermappe: samme sted som AulaSync selv skriver genvejen (StartMenuShortcut.cs).
