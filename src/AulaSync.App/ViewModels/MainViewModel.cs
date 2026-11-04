@@ -79,7 +79,7 @@ public sealed partial class MainViewModel : ObservableObject
                 row = new ScheduleRowViewModel(s.Schedule, _actions, RemoveAsync, _platform.FileManager);
                 Rows.Insert(Math.Min(i, Rows.Count), row);
             }
-            row.Update(StatusText.Row(s.Schedule, _sync.StateOf(s.Schedule), status.NextSync, _tz),
+            row.Update(StatusText.Row(s.Schedule, _sync.StateOf(s.Schedule), status.NextSync, _tz, !status.LoggedIn, now),
                 RowPresenter.Buttons(app, s, _sync.ChangedSinceImport(s), now, _tz, Fetch(s)));
         }
         IsEmpty = Rows.Count == 0;
@@ -89,7 +89,10 @@ public sealed partial class MainViewModel : ObservableObject
         BannerText = _banner?.Text;
         BannerAction = _banner?.ActionLabel;
 
-        BottomText = StatusText.BottomBar(status with { Progress = null }, now, _tz);
+        // Logget ud lige efter start kender AulaSync kun tidspunkterne fra filerne.
+        var last = status.LoggedIn ? status.LastSuccess
+            : status.LastSuccess ?? subscriptions.Select(s => _sync.StateOf(s.Schedule).UpdatedAt).Max();
+        BottomText = StatusText.BottomBar(status with { Progress = null, LastSuccess = last }, now, _tz);
         IsRefreshing = status.Progress is not null;
         RefreshLabel = status.Progress is { } p ? $"Henter {p.Done} af {p.Total}…" : "Opdatér nu";
         var level = StatusText.Level(status, serverRunning);

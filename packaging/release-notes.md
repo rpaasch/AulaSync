@@ -1,5 +1,10 @@
 AulaSync 3 er en ny udgave med ét formål: skemaer fra Aula, der holder sig opdateret i din kalender, på Windows og Mac.
 
+**Nyt i 3.4.0**
+- Det er tydeligt, når AulaSync er logget ud af Aula og ikke kan logge ind igen af sig selv, så skemaerne ikke bliver hentet. Med *Vis opdateringstid i kalenderen* står der "⚠ Log ind i AulaSync · Opd. …" i kalenderne, hvor tidspunktet ellers står; lektionerne er de samme som før. I AulaSync står der ved hvert skema, hvornår det sidst blev hentet, fx "Klasse · ikke opdateret siden i går 07:30". Når du har logget ind, henter AulaSync skemaerne, og det bliver som før.
+- Ny indstilling: *Besked, når du er logget ud af Aula*: *Hver dag* (standard), *Én gang* eller *Ingen*. Mens du er logget ud, prøver AulaSync også selv at logge ind igen hver dag.
+- Windows: Installationsprogrammet og afinstallationen lukker kun AulaSync og dens login, aldrig andre programmer, heller ikke ved en installation uden vinduer (fx med winget).
+
 **Nyt i 3.3.0**
 - *Vis opdateringstid i kalenderen* er blevet en rullemenu i Indstillinger. Tidspunktet kan stå som en privat heldagsbegivenhed hver mandag, som en privat aftale hver mandag på et klokkeslæt, du selv vælger, eller nederst i hver lektions beskrivelse. Heldagsbegivenheden og aftalen står hver mandag, ikke kun i denne uge, så du kan se dem, uanset hvilken uge du kigger på. Brugte du aftalen kl. 5.45, fortsætter den.
 - Når du ændrer *Vis opdateringstid i kalenderen*, henter AulaSync skemaerne med det samme i stedet for ved næste opdatering.

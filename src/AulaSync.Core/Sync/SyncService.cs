@@ -33,6 +33,7 @@ public sealed class SyncService
     readonly HashSet<string> _reportedImports; // importerede skemaer, der er meldt som ændret (eller var det ved start)
     readonly FetchWatch _fetches;
     IAulaClient? _client;
+    volatile bool _loggedOut; // kalenderne viser, at AulaSync er logget ud (ShowLoggedOutAsync)
     string _institution = ""; // institutionens nummer i filnavnene (CalendarFiles)
     DateTimeOffset? _lastSyncStarted;
 
@@ -69,14 +70,15 @@ public sealed class SyncService
 
     string NewPath(ScheduleRef schedule) => Path.Combine(_calendarDir, CalendarFiles.Name(Volatile.Read(ref _institution), schedule));
 
-    // Kendt tilstand fra denne kørsel; ellers læses filen på disken (fx lige efter opstart).
+    // Kendt tilstand fra denne kørsel; ellers læses filen på disken (fx lige efter opstart): hvornår skemaet blev hentet står
+    // i filen (en fil fra før 3.4: tidspunktet, den blev skrevet), for den kan være skrevet om uden at blive hentet.
     public ScheduleState StateOf(ScheduleRef schedule)
     {
         lock (_lock)
             if (_states.TryGetValue(schedule.Key, out var known)) return known;
         var path = FilePath(schedule);
         return IcsInspect.ReadFile(path) is { } summary
-            ? new ScheduleState(summary.Events, new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero), null, null)
+            ? new ScheduleState(summary.Events, summary.Fetched ?? new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero), null, null)
             : new ScheduleState(null, null, null, null);
     }
 
@@ -98,7 +100,11 @@ public sealed class SyncService
     // ud beholdes den, så en opdatering, der stadig kører, ikke giver filerne et andet navn.
     public void SetClient(IAulaClient? client, string institution = "")
     {
-        if (client is not null) Volatile.Write(ref _institution, institution);
+        if (client is not null)
+        {
+            Volatile.Write(ref _institution, institution);
+            _loggedOut = false; // filerne viser det, indtil de er hentet igen
+        }
         Volatile.Write(ref _client, client);
         Update(s => s with { Connection = client is null ? ConnectionState.LoggedOut : ConnectionState.Online, LastError = null });
     }
@@ -111,7 +117,13 @@ public sealed class SyncService
         try
         {
             var client = Volatile.Read(ref _client);
-            if (client is null) return;
+            if (client is null)
+            {
+                // Logget ud: fx er Vis opdateringstid i kalenderen ændret (BackgroundScheduler.SyncSoon), så filerne viser det
+                // på den nye måde.
+                if (_loggedOut) RewriteStatus(_store.Load().Select(s => s.Schedule), loggedOut: true);
+                return;
+            }
             lock (_lock) _lastSyncStarted = _time.GetUtcNow();
             SyncStarted?.Invoke();
             var subscriptions = _store.Load();
@@ -131,7 +143,14 @@ public sealed class SyncService
                     HandleExpired(client);
                     return;
                 }
-                if (outcome == Outcome.Offline) { offline = true; error = message; break; }
+                if (outcome == Outcome.Offline)
+                {
+                    offline = true;
+                    error = message;
+                    // De skemaer, der ikke nås, står ikke længere med "Log ind i AulaSync": AulaSync er logget ind.
+                    if (Volatile.Read(ref _client) == client) RewriteStatus(subscriptions.Skip(i + 1).Select(s => s.Schedule), loggedOut: false);
+                    break;
+                }
                 anyOk |= outcome == Outcome.Ok;
                 error ??= message;
             }
@@ -252,6 +271,49 @@ public sealed class SyncService
             : list.Select(s => Differs(s, out var role) ? s with { Schedule = s.Schedule with { Role = role } } : s).ToList());
     }
 
+    // Logget ud af Aula, og stille genlogin lykkedes ikke (AppHost): med Vis opdateringstid i kalenderen står der
+    // "⚠ Log ind i AulaSync · Opd. …" i kalenderne, indtil AulaSync er logget ind og har hentet skemaerne igen. Lektionerne
+    // bliver, som de er (IcsWriter.Rewrite).
+    public async Task ShowLoggedOutAsync()
+    {
+        await _syncGate.WaitAsync();
+        try
+        {
+            if (Volatile.Read(ref _client) is not null) return; // logget ind igen imens
+            _loggedOut = true;
+            RewriteStatus(_store.Load().Select(s => s.Schedule), loggedOut: true);
+        }
+        finally { _syncGate.Release(); }
+    }
+
+    // Opdateringstiden i skemaernes filer skrives om uden at hente dem (IcsWriter.Rewrite): logget ud, eller normal igen for
+    // et skema, der ikke kunne hentes efter et login. En fil, der ikke kan læses eller skrives, bliver, som den er.
+    void RewriteStatus(IEnumerable<ScheduleRef> schedules, bool loggedOut)
+    {
+        var options = Options(_config());
+        var now = _time.GetUtcNow();
+        foreach (var schedule in schedules)
+        {
+            var path = FilePath(schedule);
+            try
+            {
+                if (!File.Exists(path)) continue;
+                var written = new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero);
+                if (IcsWriter.Rewrite(File.ReadAllText(path), schedule, now, options, loggedOut, written) is not { } text) continue;
+                AtomicFile.WriteAllText(path, text);
+                _log.Info($"Opdateringstiden i {Path.GetFileName(path)} {(loggedOut ? "viser, at AulaSync er logget ud" : "er skrevet om")}");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _log.Error($"Kunne ikke skrive opdateringstiden i {Path.GetFileName(path)}", ex);
+            }
+        }
+    }
+
+    // Kalenderfilernes indstillinger (Indstillinger: interval og Vis opdateringstid i kalenderen).
+    IcsOptions Options(AppConfig config) =>
+        new(UpdateIntervals.Refresh(config.UpdateInterval), config.StatusEvent ? _time.LocalTimeZone : null, config.StatusTime, config.StatusStyle);
+
     // Log ud: valgene ryddes, .ics-filerne bliver liggende.
     public async Task ClearAllAsync()
     {
@@ -298,11 +360,8 @@ public sealed class SyncService
         {
             var today = DateOnly.FromDateTime(_time.GetLocalNow().DateTime);
             var events = await new ScheduleFetcher(client, _delay).FetchAsync(schedule, today, ct);
-            var config = _config();
-            var options = new IcsOptions(UpdateIntervals.Refresh(config.UpdateInterval), config.StatusEvent ? _time.LocalTimeZone : null,
-                config.StatusTime, config.StatusStyle);
             var path = NewPath(schedule);
-            AtomicFile.WriteAllText(path, IcsWriter.Write(schedule, events, now, options));
+            AtomicFile.WriteAllText(path, IcsWriter.Write(schedule, events, now, Options(_config())));
             // Blev skemaet fjernet, mens det blev hentet, så fjern også filen igen. Ved log ud bliver filerne liggende.
             if (!_store.Load().Any(s => s.Key == schedule.Key))
             {
@@ -319,6 +378,7 @@ public sealed class SyncService
         {
             _log.Info($"Ingen forbindelse til Aula ved {schedule.FileName}: {ex.Message}");
             SetState(schedule, StateOf(schedule) with { Error = OfflineMessage, ErrorAt = now });
+            RewriteStatus([schedule], loggedOut: false); // ikke længere "Log ind i AulaSync", hvis den stod der
             return (Outcome.Offline, OfflineMessage);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -326,6 +386,7 @@ public sealed class SyncService
         {
             _log.Error($"Opdatering af {schedule.FileName} fejlede — den gamle fil beholdes", ex);
             SetState(schedule, StateOf(schedule) with { Error = ex.Message, ErrorAt = now });
+            RewriteStatus([schedule], loggedOut: false);
             return (Outcome.Failed, $"{schedule.CalendarName}: {ex.Message}");
         }
     }

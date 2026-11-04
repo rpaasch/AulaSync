@@ -83,6 +83,20 @@
           <app:InfoTip Text="AulaSync skal køre, for at kalenderne bliver opdateret. Slået til starter AulaSync i baggrunden, når du logger ind på computeren, uden at vise vinduet." AutomationProperties.Name="Om Start AulaSync, når jeg logger ind" />
         </StackPanel>
       </DockPanel>
+      <DockPanel Classes="r">
+        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding NoticeOptions}" SelectedItem="{Binding SelectedNotice}"
+                  VerticalAlignment="Center" Margin="12,0,0,0" AutomationProperties.Name="Besked, når du er logget ud af Aula">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="app:NoticeOption">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <TextBlock Text="Besked, når du er logget ud af Aula" />
+          <app:InfoTip Text="Udløber dit login i Aula, og kan AulaSync ikke logge ind igen af sig selv, hentes skemaerne ikke, før du logger ind. Så giver AulaSync besked med en boks på skærmen: hver dag (første gang med det samme), kun én gang, eller aldrig. Ikonet og hovedvinduet viser det altid, og med Vis opdateringstid i kalenderen står der &quot;⚠ Log ind i AulaSync&quot; i kalenderne." AutomationProperties.Name="Om Besked, når du er logget ud af Aula" />
+        </StackPanel>
+      </DockPanel>
       <Separator />
       <DockPanel Classes="r">
         <Panel DockPanel.Dock="Right" VerticalAlignment="Center">

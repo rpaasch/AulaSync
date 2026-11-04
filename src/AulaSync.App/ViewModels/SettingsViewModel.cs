@@ -17,6 +17,12 @@ public sealed record StatusOption(bool On, StatusStyle Style, string Label)
     public override string ToString() => Label;
 }
 
+// Et valg under "Besked, når du er logget ud af Aula" (LoggedOutNotice).
+public sealed record NoticeOption(LoggedOutNotice Notice, string Label)
+{
+    public override string ToString() => Label;
+}
+
 // Indstillinger (spec §3.2): kalenderprogram, opdatering, start ved login, konto med Log ud…, hjælp, fejlfinding, version og
 // Afinstallér AulaSync….
 public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
@@ -67,6 +73,13 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
         ];
         SelectedStatus = StatusOptions.FirstOrDefault(o => o.On && saved.StatusEvent && o.Style == saved.StatusStyle) ?? StatusOptions[0];
         StatusTime = saved.StatusTime.ToTimeSpan();
+        NoticeOptions =
+        [
+            new(LoggedOutNotice.Daily, "Hver dag"),
+            new(LoggedOutNotice.Once, "Én gang"),
+            new(LoggedOutNotice.Never, "Ingen"),
+        ];
+        SelectedNotice = NoticeOptions.Single(o => o.Notice == saved.LoggedOutNotice);
         StartAtLogin = autostart.IsEnabled;
         session.Changed += () => OnPropertyChanged(string.Empty);
     }
@@ -84,6 +97,9 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
     // Klokkeslættet vises kun ved "Aftale hver mandag".
     public bool IsTimedStatus => SelectedStatus is { On: true, Style: StatusStyle.Timed };
     [ObservableProperty] public partial bool StartAtLogin { get; set; }
+
+    public IReadOnlyList<NoticeOption> NoticeOptions { get; }
+    [ObservableProperty] public partial NoticeOption SelectedNotice { get; set; }
 
     public bool IsSignedIn => _session.Profile is not null;
     public string AccountText => _session.Profile is { } p
@@ -131,6 +147,13 @@ public sealed partial class SettingsViewModel : ObservableObject, ICalendarCards
         if (saved.StatusTime == TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(minutes))) return; // også ved start
         _config.Save(saved with { StatusMinutes = minutes });
         if (saved is { StatusEvent: true, StatusStyle: StatusStyle.Timed }) _statusEventChanged();
+    }
+
+    // Gælder fra næste besked (Relogin læser den hver gang).
+    partial void OnSelectedNoticeChanged(NoticeOption value)
+    {
+        if (value is null || _config.Load().LoggedOutNotice == value.Notice) return; // også ved start
+        _config.Save(_config.Load() with { LoggedOutNotice = value.Notice });
     }
 
     partial void OnStartAtLoginChanged(bool value)

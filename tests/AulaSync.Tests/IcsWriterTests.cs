@@ -270,8 +270,98 @@ public class IcsWriterTests
         var plain = IcsInspect.Read(IcsWriter.Write(Anna, lessons, now, new IcsOptions(TimeSpan.FromHours(1))));
         Assert.Equal(2, plain.Events);
         foreach (var style in Enum.GetValues<StatusStyle>())
-            Assert.Equal(plain, IcsInspect.Read(IcsWriter.Write(Anna, lessons, now.AddHours(3), Style(style))));
+        {
+            var summary = IcsInspect.Read(IcsWriter.Write(Anna, lessons, now.AddHours(3), Style(style)));
+            Assert.Equal((plain.Events, plain.ContentHash), (summary.Events, summary.ContentHash));
+        }
     }
+
+    // Hvornår skemaet blev hentet, står i filens hoved, så det kan læses, også når opdateringstiden er skrevet om.
+    [Fact]
+    public void Fetch_time_is_in_the_header()
+    {
+        var ics = IcsWriter.Write(Anna, [Ev(id: "5001")], Now);
+        Assert.Contains("X-PUBLISHED-TTL:PT1H\r\nX-AULASYNC-FETCHED:20261006T120000Z\r\n", ics);
+        Assert.Equal(Now, IcsInspect.Read(ics).Fetched);
+    }
+
+    static readonly DateTimeOffset Fetched = new(2026, 10, 7, 12, 32, 0, TimeSpan.Zero); // onsdag 14:32 dansk tid
+    static readonly AulaEvent[] Lessons = [Ev(id: "5001"), Ev(id: "5002", title: "Pause", location: "", groups: [], teachers: [],
+        start: "2026-04-13T10:00:00+02:00", end: "2026-04-13T10:30:00+02:00")];
+
+    static string Stampless(string ics) =>
+        string.Join("\r\n", Unfold(ics).Split("\r\n").Where(l => !l.StartsWith("DTSTAMP:", StringComparison.Ordinal)));
+
+    // Logget ud af Aula (Rewrite): lektionerne bliver, og opdateringstiden fra hentningen får "⚠ Log ind i AulaSync · " foran,
+    // på den måde, der er valgt. Antal, hash og hentetidspunkt er de samme (Ændret siden import), DTSTAMP er nu, og logget ind
+    // igen er filen som før, bortset fra DTSTAMP.
+    [Theory]
+    [InlineData(StatusStyle.Timed, 52)]
+    [InlineData(StatusStyle.AllDay, 52)]
+    [InlineData(StatusStyle.InDescription, 2)]
+    public void Rewrite_shows_logged_out_and_back(StatusStyle style, int warnings)
+    {
+        var later = Fetched.AddDays(2);
+        var options = new IcsOptions(TimeSpan.FromHours(1), Copenhagen, StatusStyle: style);
+        var ics = IcsWriter.Write(Anna, Lessons, Fetched, options);
+
+        var warned = IcsWriter.Rewrite(ics, Anna, later, options, loggedOut: true, fetchedFallback: later)!;
+        Assert.Equal(warnings, System.Text.RegularExpressions.Regex.Matches(Unfold(warned), "⚠ Log ind i AulaSync · Opd\\. 071026@14:32(\r\n)").Count);
+        Assert.DoesNotContain(":Opd. ", Unfold(warned));
+        Assert.DoesNotContain("\\n\\nOpd. ", Unfold(warned));
+        Assert.Contains("DTSTAMP:20261009T123200Z\r\n", warned);
+        Assert.DoesNotContain("DTSTAMP:20261007T123200Z", warned);
+        var (before, after) = (IcsInspect.Read(ics), IcsInspect.Read(warned));
+        Assert.Equal((before.Events, before.ContentHash, Fetched), (after.Events, after.ContentHash, after.Fetched));
+        Assert.Null(IcsWriter.Rewrite(warned, Anna, later.AddHours(1), options, loggedOut: true, fetchedFallback: later));
+
+        var back = IcsWriter.Rewrite(warned, Anna, later.AddHours(1), options, loggedOut: false, fetchedFallback: later)!;
+        Assert.Equal(Stampless(ics), Stampless(back));
+    }
+
+    // En fil fra før 3.4 har ikke hentetidspunktet i hovedet: det er lektionernes DTSTAMP, og hovedet får det.
+    [Fact]
+    public void Rewrite_of_a_file_from_before_3_4_uses_dtstamp()
+    {
+        var options = new IcsOptions(TimeSpan.FromHours(1), Copenhagen);
+        var old = IcsWriter.Write(Anna, Lessons, Fetched, options).Replace("X-AULASYNC-FETCHED:20261007T123200Z\r\n", "");
+        Assert.Equal(Fetched, IcsInspect.Read(old).Fetched);
+        var warned = IcsWriter.Rewrite(old, Anna, Fetched.AddDays(1), options, loggedOut: true, fetchedFallback: Fetched.AddDays(1))!;
+        Assert.Contains("X-PUBLISHED-TTL:PT1H\r\nX-AULASYNC-FETCHED:20261007T123200Z\r\nBEGIN:VEVENT\r\n", warned);
+        Assert.Contains("SUMMARY:⚠ Log ind i AulaSync · Opd. 071026@14:32\r\n", Unfold(warned));
+        Assert.Equal(Fetched, IcsInspect.Read(warned).Fetched);
+    }
+
+    // Uden lektioner og uden hentetidspunkt i filen bruges fetchedFallback (fx hvornår filen blev skrevet).
+    [Fact]
+    public void Rewrite_of_an_empty_old_file_uses_the_fallback()
+    {
+        var options = new IcsOptions(TimeSpan.FromHours(1), Copenhagen);
+        var old = IcsWriter.Write(Anna, [], Fetched).Replace("X-AULASYNC-FETCHED:20261007T123200Z\r\n", "");
+        var warned = IcsWriter.Rewrite(old, Anna, Fetched.AddDays(1), options, loggedOut: true, fetchedFallback: Fetched.AddHours(-1))!;
+        Assert.Contains("SUMMARY:⚠ Log ind i AulaSync · Opd. 071026@13:32\r\n", Unfold(warned));
+    }
+
+    // Er Vis opdateringstid i kalenderen slået fra, er der intet at vise: opdateringstiden forsvinder, og står der ingen,
+    // ændres intet.
+    [Theory]
+    [InlineData(StatusStyle.Timed)]
+    [InlineData(StatusStyle.InDescription)]
+    public void Rewrite_without_status_removes_it(StatusStyle style)
+    {
+        var off = new IcsOptions(TimeSpan.FromHours(1));
+        var ics = IcsWriter.Write(Anna, Lessons, Fetched, new IcsOptions(TimeSpan.FromHours(1), Copenhagen, StatusStyle: style));
+        var removed = IcsWriter.Rewrite(ics, Anna, Fetched.AddDays(1), off, loggedOut: true, fetchedFallback: Fetched)!;
+        Assert.Equal(Stampless(IcsWriter.Write(Anna, Lessons, Fetched, off)), Stampless(removed));
+        Assert.Null(IcsWriter.Rewrite(removed, Anna, Fetched.AddDays(2), off, loggedOut: true, fetchedFallback: Fetched));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("ikke en kalender")]
+    [InlineData("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n")]
+    public void Rewrite_leaves_other_files_alone(string text) =>
+        Assert.Null(IcsWriter.Rewrite(text, Anna, Fetched, new IcsOptions(TimeSpan.FromHours(1), Copenhagen), true, Fetched));
 
     [Fact]
     public void No_status_event_by_default() =>

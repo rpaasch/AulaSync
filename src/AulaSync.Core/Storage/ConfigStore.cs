@@ -9,12 +9,19 @@ public enum CalendarApp { AppleCalendar, OutlookClassic, OutlookImport, Other }
 // eller nederst i hver lektions beskrivelse. Timed først, så en config.json fra før valget (kun StatusEvent) giver aftalen.
 public enum StatusStyle { Timed, AllDay, InDescription }
 
+// Besked, når AulaSync er logget ud af Aula (Indstillinger): hver dag, til man logger ind igen, kun én gang, eller aldrig.
+// Daily først, så en config.json fra før valget giver det.
+public enum LoggedOutNotice { Daily, Once, Never }
+
 // Port: kalender-serverens port for denne bruger; den vælges ved første start (UserPort).
 // UpdateMinutes: hvor tit skemaerne hentes fra Aula (Indstillinger); null eller en ukendt værdi er hver 4. time.
 // StatusEvent: kalenderne viser, hvornår skemaet i kalenderen blev hentet (IcsWriter), på den måde, StatusStyle siger.
 // StatusMinutes: aftalens klokkeslæt i minutter efter midnat (Indstillinger); null eller en ugyldig værdi er kl. 5.45.
+// LoggedOutNotice: hvor tit notifikationsboksen siger, at AulaSync er logget ud af Aula (Relogin); LoggedOutNotifiedAt:
+// hvornår den sidst gjorde det (null efter et login), så Én gang og Hver dag også gælder efter en genstart.
 public sealed record AppConfig(CalendarApp? CalendarApp = null, bool FirstRunDone = false, int? Port = null,
-    int? UpdateMinutes = null, bool StatusEvent = false, int? StatusMinutes = null, StatusStyle StatusStyle = StatusStyle.Timed)
+    int? UpdateMinutes = null, bool StatusEvent = false, int? StatusMinutes = null, StatusStyle StatusStyle = StatusStyle.Timed,
+    LoggedOutNotice LoggedOutNotice = LoggedOutNotice.Daily, DateTimeOffset? LoggedOutNotifiedAt = null)
 {
     public static readonly TimeOnly DefaultStatusTime = new(5, 45);
 

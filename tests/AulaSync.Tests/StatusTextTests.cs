@@ -58,6 +58,15 @@ public class StatusTextTests
 
     [Fact] public void Row_one_lesson() => Assert.Equal(new RowText("Lokale · 1 lektion", false), StatusText.Row(new(ScheduleKind.Resource, "4", "53"), new(1, At, null, null), Next, Copenhagen));
     [Fact] public void Row_pending() => Assert.Equal(new RowText("Klasse · henter…", false), StatusText.Row(new(ScheduleKind.Group, "3", "7A"), new(null, null, null, null), Next, Copenhagen));
+    // Logget ud: hvornår skemaet sidst blev hentet, også når den sidste hentning fejlede (der prøves ikke igen).
+    [Fact] public void Row_logged_out() => Assert.Equal(new RowText("Klasse · ikke opdateret siden i går 14:02", false),
+        StatusText.Row(new(ScheduleKind.Group, "3", "7A"), new(3, At, "x", At.AddHours(4)), Next, Copenhagen, loggedOut: true, now: At.AddDays(1)));
+    [Fact] public void Row_logged_out_not_fetched() => Assert.Equal(new RowText("Lokale · hentes, når du logger ind", false),
+        StatusText.Row(new(ScheduleKind.Resource, "4", "53"), new(null, null, "x", At), Next, Copenhagen, loggedOut: true, now: At));
+    [Fact] public void Bottom_logged_out() => Assert.Equal("Ikke opdateret siden 3. okt. 14:02",
+        StatusText.BottomBar(Ok() with { Connection = ConnectionState.LoggedOut }, At.AddDays(3), Copenhagen));
+    [Fact] public void Bottom_logged_out_unknown() => Assert.Equal("Logget ud af Aula",
+        StatusText.BottomBar(Ok() with { Connection = ConnectionState.LoggedOut, LastSuccess = null }, At, Copenhagen));
     [Fact] public void Row_error() => Assert.Equal(new RowText("Kunne ikke hentes kl. 14:02 · prøver igen 20:02", true), StatusText.Row(Anna, new(214, null, "x", At), Next, Copenhagen));
 
     [Fact]

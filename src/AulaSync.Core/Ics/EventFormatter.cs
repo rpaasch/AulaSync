@@ -32,8 +32,14 @@ public static class EventFormatter
 
     static string Format(Participant p) => p.Initials == "" ? p.Name : $"{p.Name} ({p.Initials})";
 
+    // Foran opdateringstiden, når AulaSync er logget ud af Aula (IcsWriter.Rewrite). Ingen tegn med betydning i et regulært
+    // udtryk: IcsInspect.StatusInDescription bruger den, som den står.
+    public const string LoggedOutPrefix = "⚠ Log ind i AulaSync · ";
+
     // Statusbegivenheden (IcsWriter, Indstillinger › Vis opdateringstid i kalenderen): titel og beskrivelse er det samme,
-    // tidspunktet for hentningen, fx "Opd. 091026@07:30" (dag, måned, år og klokkeslæt i lokal tid).
-    public static string StatusText(DateTimeOffset at, TimeZoneInfo tz) =>
-        "Opd. " + TimeZoneInfo.ConvertTime(at, tz).ToString("ddMMyy'@'HH':'mm", System.Globalization.CultureInfo.InvariantCulture);
+    // tidspunktet for hentningen, fx "Opd. 091026@07:30" (dag, måned, år og klokkeslæt i lokal tid). Logget ud af Aula står
+    // der først, at man skal logge ind, fx "⚠ Log ind i AulaSync · Opd. 091026@07:30".
+    public static string StatusText(DateTimeOffset at, TimeZoneInfo tz, bool loggedOut = false) =>
+        (loggedOut ? LoggedOutPrefix : "")
+        + "Opd. " + TimeZoneInfo.ConvertTime(at, tz).ToString("ddMMyy'@'HH':'mm", System.Globalization.CultureInfo.InvariantCulture);
 }
